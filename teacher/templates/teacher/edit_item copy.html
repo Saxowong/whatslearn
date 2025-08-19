@@ -1,0 +1,121 @@
+{% extends "user/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container pt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{% url 'teacher:manage_courses' %}">Manage Courses</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{% url 'teacher:manage_lessons' activity.lesson.course.id %}">Lessons</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{% url 'teacher:manage_activities' activity.lesson.id %}">Activities</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+               Edit Item
+            </li>
+        </ol>
+    </nav>
+</div>
+<div class="container mt-5">
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0">{% if item.id %}Edit Item{% else %}New Item{% endif %}</h4>
+        </div>
+        <div class="card-body">
+            <form id="itemForm" method="POST" action="{% url 'teacher:edit_item' activity.id item.id|default:0 %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                {% if error %}
+                <div class="alert alert-danger mb-3">{{ error }}</div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label for="title" class="form-label">Item Title</label>
+                    {{ form.title }}
+                    {% if form.title.errors %}
+                    <div class="invalid-feedback d-block">{{ form.title.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label for="question" class="form-label">Question</label>
+                    {{ form.question }}
+                    {% if form.question.errors %}
+                    <div class="invalid-feedback d-block">{{ form.question.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label for="answer" class="form-label">Answer</label>
+                    {{ form.answer }}
+                    {% if form.answer.errors %}
+                    <div class="invalid-feedback d-block">{{ form.answer.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label for="image" class="form-label">Image</label>
+                    {{ form.image }}
+                    {% if item.image %}
+                    <div class="mt-2">
+                        <small>Current image: <a href="{{ item.image.url }}" target="_blank">View</a></small>
+                    </div>
+                    {% endif %}
+                    {% if form.image.errors %}
+                    <div class="invalid-feedback d-block">{{ form.image.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label for="audio" class="form-label">Audio</label>
+                    {{ form.audio }}
+                    {% if item.audio %}
+                    <div class="mt-2">
+                        <small>Current audio: <a href="{{ item.audio.url }}" target="_blank">Listen</a></small>
+                    </div>
+                    {% endif %}
+                    {% if form.audio.errors %}
+                    <div class="invalid-feedback d-block">{{ form.audio.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                {% if item.id %}
+                <div class="mb-3">
+                    <label for="order" class="form-label">Order</label>
+                    {{ form.order }}
+                    {% if form.order.errors %}
+                    <div class="invalid-feedback d-block">{{ form.order.errors }}</div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <input type="hidden" name="order" value="10000">
+                {% endif %}
+
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{% url 'teacher:manage_items' activity.id %}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-success">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+<style>
+    .form-label {
+        font-weight: 500;
+    }
+    .card {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .form-control, .form-select {
+        width: 100%;
+    }
+</style>
+{% endblock %}

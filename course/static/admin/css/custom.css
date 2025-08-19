@@ -1,0 +1,4 @@
+/* Override default admin styles */
+.img-fluid {
+    height: 200px !important;
+}

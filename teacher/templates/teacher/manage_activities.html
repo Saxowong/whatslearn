@@ -1,0 +1,270 @@
+{% extends "user/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container pt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{% url 'teacher:manage_courses' %}">Manage Courses</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{% url 'teacher:manage_lessons' lesson.course.id %}">Lessons</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+               Activities
+            </li>
+        </ol>
+    </nav>
+</div>
+<div class="container mt-5">
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'success' %}alert-success{% elif message.tags == 'error' %}alert-danger{% endif %} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>{{ lesson.title }}</h2>
+        <div>
+            <button type="submit" form="reorderForm" class="btn btn-primary me-2" id="saveOrderBtn" aria-label="Save activity order">
+                <i class="bi bi-save"></i> Save Order
+            </button>
+            <a href="{% url 'teacher:edit_activity' lesson.id 0 %}" class="btn btn-success" aria-label="Add new activity">
+                <i class="bi bi-plus-lg"></i> New Activity
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form id="reorderForm" method="POST" action="{% url 'teacher:manage_activities' lesson.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reorder">
+                <table id="activitiesTable" class="table table-striped" aria-Label="Activities table">
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>Activity Title</th>
+                            <th>Type</th>
+                            <th>Created At</th>
+                            <th>Updated At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for activity in activities %}
+                        <tr data-activity-id="{{ activity.id }}">
+                            <td class="editable-order" data-order="{{ activity.order|default:'0' }}">
+                                <span class="order-value">{{ activity.order|default:"0" }}</span>
+                                <input type="hidden" name="order_{{ activity.id }}" class="order-input" value="{{ activity.order|default:'0' }}">
+                            </td>
+                            <td><a href="{% url 'teacher:manage_items' activity.id %}" aria-label="Manage items">{{ activity.title|default:"Untitled" }}</a></td>
+                            <td>{{ activity.get_activity_type_display|default:"N/A" }}</td>
+                            <td data-sort="{{ activity.created_at|date:'c'|default:'1970-01-01T00:00:00Z' }}">{{ activity.created_at|date:"Y-m-d H:i:s"|default:"N/A" }}</td>
+                            <td data-sort="{{ activity.updated_at|date:'c'|default:'1970-01-01T00:00:00Z' }}">{{ activity.updated_at|date:"Y-m-d H:i:s"|default:"N/A" }}</td>
+                            <td>
+                                <a href="{% url 'teacher:edit_activity' lesson.id activity.id %}" class="btn btn-sm btn-primary" aria-label="Edit activity">
+                                    <i class="bi bi-pencil"></i>
+                                </a>                                
+                                {% if activity.activity_type == 'exercise' %}
+                                <a href="{% url 'teacher:manage_items' activity.id %}" class="btn btn-sm btn-info" aria-label="Manage items">
+                                    <i class="bi bi-list-check"></i>
+                                </a>
+                                {% endif %}
+                                <button type="button" class="btn btn-sm btn-warning delete-activity-btn" 
+                                        data-activity-id="{{ activity.id }}" data-activity-title="{{ activity.title|default:'Untitled'|escapejs }}"
+                                        data-bs-toggle="modal" data-bs-target="#deleteActivityModal" aria-label="Delete activity">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td>No items found</td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Activity Modal -->
+    <div class="modal fade" id="deleteActivityModal" tabindex="-1" aria-labelledby="deleteActivityModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteActivityModalLabel">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="deleteActivityForm" method="POST" action="">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        Are you sure you want to delete the activity "<span id="activityTitle"></span>"?
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="confirmDeleteActivityBtn">Delete</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+<style>
+    .badge {
+        font-size: 0.9em;
+        min-width: 2.5em;
+        padding: 0.3em 0.6em;
+    }
+    th.sorting:after, th.sorting_asc:after, th.sorting_desc:after {
+        opacity: 0.8 !important;
+    }
+    .dataTables_wrapper .dataTables_filter input {
+        margin-left: 0.5em;
+    }
+    .editable-order:hover {
+        cursor: pointer;
+        background-color: #f8f9fa;
+    }
+    .editable-order input {
+        width: 100%;
+        border: none;
+        background: transparent;
+        padding: 0;
+        font-size: inherit;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    try {
+        const table = $('#activitiesTable').DataTable({
+            dom: '<"row"<"col-md-6"B><"col-md-6"f>>rt<"row"<"col-md-6"i><"col-md-6"p>>',
+            buttons: [
+                {
+                    extend: 'excelHtml5',
+                    className: 'btn btn-sm btn-outline-success',
+                    exportOptions: { columns: [0, 1, 2, 3, 4] }
+                },
+                {
+                    extend: 'pdfHtml5',
+                    className: 'btn btn-sm btn-outline-danger',
+                    title: 'Activities for {{ lesson.title|default:"Lesson"|escapejs }} - {{ request.user.get_full_name|default:request.user.username|escapejs }}',
+                    exportOptions: { columns: [0, 1, 2, 3, 4] }
+                }
+            ],
+            responsive: true,
+            order: [[0, 'asc']],
+            columnDefs: [
+                {
+                    targets: [3, 4],
+                    render: function(data, type) {
+                        if (type === 'display') {
+                            if (!data || data === 'N/A') return 'N/A';
+                            try {
+                                const date = new Date(data);
+                                return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: 'numeric',
+                                    second: 'numeric'
+                                });
+                            } catch (e) {
+                                console.error('Date rendering error:', e);
+                                return 'N/A';
+                            }
+                        }
+                        return data || '1970-01-01T00:00:00Z';
+                    }
+                },
+                {
+                    targets: -1,
+                    orderable: false,
+                    searchable: false
+                }
+            ],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search activities...",
+                emptyTable: "No activities found for this lesson."
+            },
+            initComplete: function() {
+                $('.dataTables_filter input').addClass('form-control form-control-sm');
+                console.log('DataTable initialized');
+            }
+        });
+
+        // Inline editing for order column
+        $(document).on('click', '.editable-order', function() {
+            try {
+                const $cell = $(this);
+                if ($cell.find('input:not([type="hidden"])').length > 0) return;
+                const currentValue = $cell.data('order') || 0;
+                const activityId = $cell.closest('tr').data('activity-id');
+                const $input = $('<input type="number" min="0" class="form-control form-control-sm">').val(currentValue);
+                $cell.find('.order-value').replaceWith($input);
+                $input.focus();
+
+                $input.on('blur', function() {
+                    const inputVal = $input.val();
+                    const newValue = isNaN(parseInt(inputVal)) ? currentValue : parseInt(inputVal);
+                    $cell.data('order', newValue);
+                    $cell.find('.order-input').val(newValue);
+                    $cell.html(`<span class="order-value">${newValue}</span><input type="hidden" name="order_${activityId}" class="order-input" value="${newValue}">`);
+                    console.log(`Order updated for activity ${activityId}: ${newValue}`);
+                });
+
+                $input.on('keypress', function(e) {
+                    if (e.which === 13) {
+                        $input.blur();
+                    }
+                });
+            } catch (e) {
+                console.error('Inline editing error:', e);
+            }
+        });
+
+        // Delete activity handler
+        $(document).on('click', '.delete-activity-btn', function() {
+            try {
+                const activityId = $(this).data('activity-id');
+                const activityTitle = $(this).data('activity-title');
+                $('#activityTitle').text(activityTitle);
+                $('#deleteActivityForm').attr('action', `{% url 'teacher:delete_activity' 0 %}`.replace('0', activityId));
+                $('#deleteActivityModal').modal('show');
+            } catch (e) {
+                console.error('Delete activity error:', e);
+            }
+        });
+    } catch (e) {
+        console.error('DataTable initialization error:', e);
+    }
+});
+</script>
+{% endblock %}

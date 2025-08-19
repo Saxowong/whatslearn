@@ -1,0 +1,149 @@
+{% extends "user/base.html" %}
+{% load static %}
+{% block content %}
+<div class="container pt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{% url 'teacher:manage_courses' %}">Manage Courses</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{% url 'teacher:manage_activities' lesson.id %}">Lessons</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                Edit Activity
+            </li>
+        </ol>
+    </nav>
+</div>
+<div class="container mt-5">
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0">{% if activity.id %}Edit Activity{% else %}New Activity{% endif %}</h4>
+        </div>
+        <div class="card-body">
+            <form id="activityForm" method="POST" action="{% url 'teacher:edit_activity' lesson.id activity.id|default:0 %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                {% if error %}
+                <div class="alert alert-danger mb-3">{{ error }}</div>
+                {% endif %}
+                {% if form.errors %}
+                <div class="alert alert-danger mb-3">
+                    {% for field in form %}
+                        {% for error in field.errors %}
+                            <p>{{ field.label }}: {{ error }}</p>
+                        {% endfor %}
+                    {% endfor %}
+                    {% for error in form.non_field_errors %}
+                        <p>{{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="mb-3">
+                    <label for="id_activity_type" class="form-label">Activity Type</label>
+                    <select id="id_activity_type" name="activity_type" class="form-select" required {% if activity.activity_type %}disabled{% endif %}>
+                        {% for type_id, type_name in activity_types %}
+                        <option value="{{ type_id }}" {% if activity.activity_type == type_id %}selected{% endif %}>
+                            {{ type_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if activity.activity_type %}
+                    <select id="id_activity_type_hidden" name="activity_type" class="form-select" hidden>
+                        {% for type_id, type_name in activity_types %}
+                        <option value="{{ type_id }}" {% if activity.activity_type == type_id %}selected{% endif %}>
+                            {{ type_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
+                </div>
+                <div class="mb-3">
+                    <label for="id_title" class="form-label">Activity Title</label>
+                    <input type="text" id="id_title" name="title" class="form-control" value="{{ activity.title|default:'' }}" required>
+                </div>
+                <div class="mb-3" id="html-fields" style="display: {% if activity.activity_type == 'html' or not activity.activity_type %}block{% else %}none{% endif %}">
+                    <label for="id_html_content" class="form-label">Description</label>
+                    <textarea id="id_html_content" name="html_content" class="form-control ckeditor">{{ activity.html_content|default:'' }}</textarea>
+                </div>
+                <div class="mb-3" id="video-fields" style="display: {% if activity.activity_type == 'video' %}block{% else %}none{% endif %}">
+                    <label for="id_video_embed_code" class="form-label">Video Embed Code</label>
+                    <textarea id="id_video_embed_code" name="video_embed_code" class="form-control" rows="4">{{ activity.video_embed_code|default:'' }}</textarea>
+                    <small class="text-muted">Paste YouTube/Vimeo embed code here</small>
+                </div>
+                <div class="mb-3" id="pdf-fields" style="display: {% if activity.activity_type == 'pdf' %}block{% else %}none{% endif %}">
+                    <label for="id_pdf_file" class="form-label">PDF File</label>
+                    <input type="file" id="id_pdf_file" name="pdf_file" class="form-control" accept="application/pdf">
+                    {% if activity.pdf_file %}
+                    <small class="text-muted"><a href="{{ activity.pdf_file.url }}" target="_blank">{{ activity.pdf_file.name}}</a></small>
+                    {% endif %}
+                    <small class="text-muted">Upload a PDF file (replaces existing file if any)</small>
+                </div>
+                {% if activity.id %}
+                <div class="mb-3">
+                    <label for="id_order" class="form-label">Order</label>
+                    <input type="number" id="id_order" name="order" class="form-control" value="{{ activity.order }}" min="-1">
+                </div>
+                {% else %}
+                <input type="hidden" name="order" value="10000">
+                {% endif %}
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{% url 'teacher:manage_activities' lesson.id %}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-success">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+<style>
+    .form-label {
+        font-weight: 500;
+    }
+    .card {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .ck-editor__editable {
+        min-height: 80px;
+    }
+    textarea.ckeditor {
+        min-height: 200px;
+    }
+</style>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.ckeditor.com/ckeditor5/38.0.1/classic/ckeditor.js"></script>
+<script>
+$(document).ready(function() {
+    // Initialize CKEditor
+    if ($('.ckeditor').length) {
+        ClassicEditor
+            .create(document.querySelector('.ckeditor'), {
+                toolbar: {
+                    items: [
+                        'heading', '|',
+                        'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|',
+                        'outdent', 'indent', '|',
+                        'blockQuote', 'insertTable', 'undo', 'redo'
+                    ]
+                }
+            })
+            .catch(error => {
+                console.error(error);
+            });
+    }
+    // Show/hide fields based on activity type
+    $('#id_activity_type').change(function() {
+        const type = $(this).val();
+        $('#html-fields').toggle(type === 'html');
+        $('#video-fields').toggle(type === 'video');
+        $('#pdf-fields').toggle(type === 'pdf');
+    });
+    // Trigger change on page load
+    $('#id_activity_type').trigger('change');
+});
+</script>
+{% endblock %}

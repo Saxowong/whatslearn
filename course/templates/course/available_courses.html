@@ -1,0 +1,86 @@
+{% extends "user/base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <!-- Messages -->
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% endif %} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}    
+    <div class="title-row">
+        <h2 class="mb-0">Available Courses</h2>
+        <a class="btn btn-success add-btn" href="{% url 'student_courses' %}">
+            <i class="bi bi-person"></i> My Courses
+        </a>
+    </div>    
+
+    <!-- Search input field -->
+    <div class="mb-3">
+        <input type="text" id="course-search" class="form-control" placeholder="Search courses..." />
+    </div>
+
+    {% if courses %}
+    <div class="row row-cols-1 row-cols-md-2 g-4" id="course-list">
+        {% for course in courses %}
+            <div class="col-12 course-item">
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-4">
+                                {% if course.image %}
+                                <img height="120" src="{{ course.image.url }}" 
+                                    class="card-img-top img-fluid rounded" 
+                                    alt="{{ course.title }}">
+                                {% else %}
+                                <div class="bg-secondary text-center text-white py-5">
+                                    No Image
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-8">
+                                <h3 class="card-title mb-1">{{ course.title }}</h3>
+                                {% if course.teacher %}
+                                <p class="text-muted mb-2">
+                                    Instructor: <strong>{{ course.teacher.user.get_full_name|default:course.teacher.user.username }}</strong>
+                                </p>
+                                {% endif %}
+
+                                
+                                <a href="{% url 'course:enroll_course' course.id %}" class="btn btn-primary">Enroll</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    {% else %}
+        <div class="alert alert-info">
+            There is no course available at the moment.
+            <br>
+            <a href="{% url 'student_courses' %}" class="alert-link">
+                Go back to your courses
+            </a>
+        </div> 
+    {% endif %}
+</div>
+
+<!-- Include jQuery -->
+<script>
+    $(document).ready(function() {
+        // Search functionality
+        $('#course-search').on('keyup', function() {
+            var value = $(this).val().toLowerCase();
+            $('#course-list .course-item').filter(function() {
+                $(this).toggle($(this).find('.card-title').text().toLowerCase().indexOf(value) > -1)
+            });
+        });
+    });
+</script>
+{% endblock %}

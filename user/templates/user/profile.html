@@ -1,0 +1,17 @@
+{% extends 'user/base.html' %} {% block content %}
+<div class="row mb-2">
+  <div class="col-md-6 offset-md-2">
+    <h1>Profile</h1>
+    This is a profile page:
+    <h3>{{user.username}}</h3>
+    <img
+      src="{{user.profile.image.url}}"
+      alt="Profile Image"
+      width="200"
+      height="200"
+    />
+  </div>
+</div>
+{% endblock %} {% comment %}
+<p>Already have an account? <a href="{% url 'users:login' %}">Login</a></p>
+{% endcomment %}

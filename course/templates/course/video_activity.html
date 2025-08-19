@@ -1,0 +1,13 @@
+{% extends "course/activity_detail.html" %}
+
+{% block activity_content %}
+    <div class="card">
+        <div class="card-body">
+            <div class="activity-content">
+                <div class="responsive-video-container">
+                    {{ activity.video_embed_code|safe }}
+                </div>              
+            </div>
+        </div>
+    </div>
+{% endblock %}

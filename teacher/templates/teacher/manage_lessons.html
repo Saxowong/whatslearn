@@ -1,0 +1,349 @@
+{% extends "user/base.html" %}
+{% load static %}
+
+{% block content %}
+
+
+
+
+<div class="container pt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{% url 'teacher:manage_courses' %}">Manage Courses</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <span>Lessons</span>
+            </li>
+        </ol>
+    </nav>  
+</div>
+<div class="container mt-5"> 
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'success' %}alert-success{% elif message.tags == 'error' %}alert-danger{% endif %} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>{{ course.title }}</h2>
+        <div>
+            <button type="submit" form="reorderForm" class="btn btn-primary me-2" id="saveOrderBtn" aria-label="Save lesson order">
+                <i class="bi bi-save"></i> Save Order
+            </button>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addLessonModal" aria-label="Add new lesson">
+                <i class="bi bi-plus-lg"></i> New Lesson
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form id="reorderForm" method="POST" action="{% url 'teacher:manage_lessons' course.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reorder">
+                <table id="lessonsTable" class="table table-striped" aria-label="Lessons table">
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>Lesson Title</th>
+                            <th>Activities</th>
+                            <th>Created At</th>
+                            <th>Updated At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lesson in lessons %}
+                        <tr data-lesson-id="{{ lesson.id }}">
+                            <td class="editable-order" data-order="{{ lesson.order|default:'0' }}">
+                                <span class="order-value">{{ lesson.order|default:"0" }}</span>
+                                <input type="hidden" name="order_{{ lesson.id }}" class="order-input" value="{{ lesson.order|default:'0' }}">
+                            </td>
+                            <td> <a href="{% url 'teacher:manage_activities' lesson.id %}">{{ lesson.title|default:"Untitled" }}</a></td>
+                            <td><span class="badge bg-primary rounded-pill">{{ lesson.activity_count }}</span></td>
+                            <td data-sort="{{ lesson.created_at|date:'c'|default:'1970-01-01T00:00:00Z' }}">{{ lesson.created_at|date:"Y-m-d H:i:s"|default:"N/A" }}</td>
+                            <td data-sort="{{ lesson.updated_at|date:'c'|default:'1970-01-01T00:00:00Z' }}">{{ lesson.updated_at|date:"Y-m-d H:i:s"|default:"N/A" }}</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-primary edit-lesson-btn"
+                                        data-lesson-id="{{ lesson.id }}"
+                                        data-lesson-title="{{ lesson.title|default:'Untitled'|escapejs }}"
+                                        data-lesson-order="{{ lesson.order|default:'0' }}"
+                                        data-bs-toggle="modal" data-bs-target="#editLessonModal" aria-label="Edit lesson">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <a href="{% url 'teacher:manage_activities' lesson.id %}" class="btn btn-sm btn-info">
+                                    <i class="bi bi-list-check"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-warning delete-lesson-btn" 
+                                        data-lesson-id="{{ lesson.id }}" 
+                                        data-lesson-title="{{ lesson.title|default:'Untitled'|escapejs }}"
+                                        data-bs-toggle="modal" data-bs-target="#deleteLessonModal" aria-label="Delete lesson">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td>No items found</td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Lesson Muddy -->
+    <div class="modal fade" id="addLessonModal" tabindex="-1" aria-labelledby="addLessonModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addLessonModalLabel">Add New Lesson</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST" action="{% url 'teacher:manage_lessons' course.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="addLessonTitle" class="form-label">Lesson Title</label>
+                            <input type="text" class="form-control" id="addLessonTitle" name="title" required>
+                            <input type="number" value="10000" class="form-control" id="addLessonOrder" name="order" hidden>
+                        </div>
+                    </div> 
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Lesson</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Lesson Modal -->
+    <div class="modal fade" id="editLessonModal" tabindex="-1" aria-labelledby="editLessonModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editLessonModalLabel">Edit Lesson</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST" action="{% url 'teacher:manage_lessons' course.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="update">
+                    <input type="hidden" name="lesson_id" id="editLessonId">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="editLessonTitle" class="form-label">Lesson Title</label>
+                            <input type="text" class="form-control" id="editLessonTitle" name="title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editLessonOrder" class="form-label">Order</label>                            
+                            <input type="number" min="0" class="form-control" id="editLessonOrder" name="order" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Lesson Modal -->
+    <div class="modal fade" id="deleteLessonModal" tabindex="-1" aria-labelledby="deleteLessonModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteLessonModalLabel">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="deleteLessonForm" method="POST" action="">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        Are you sure you want to delete the lesson "<span id="lessonTitle"></span>"?
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="confirmDeleteLessonBtn">Delete</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+<style>
+    .badge {
+        font-size: 0.9em;
+        min-width: 2.5em;
+        padding: 0.3em 0.6em;
+    }
+    th.sorting:after, th.sorting_asc:after, th.sorting_desc:after {
+        opacity: 0.8 !important;
+    }
+    .dataTables_wrapper .dataTables_filter input {
+        margin-left: 0.5em;
+    }
+    .editable-order:hover {
+        cursor: pointer;
+        background-color: #f8f9fa;
+    }
+    .editable-order input {
+        width: 100%;
+        border: none;
+        background: transparent;
+        padding: 0;
+        font-size: inherit;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    try {
+        const table = $('#lessonsTable').DataTable({
+            dom: '<"row"<"col-md-6"B><"col-md-6"f>>rt<"row"<"col-md-6"i><"col-md-6"p>>',
+            buttons: [
+                {
+                    extend: 'excelHtml5',
+                    className: 'btn btn-sm btn-outline-success',
+                    exportOptions: { columns: [0, 1, 2, 3, 4] }
+                },
+                {
+                    extend: 'pdfHtml5',
+                    className: 'btn btn-sm btn-outline-danger',
+                    title: 'Lessons for {{ course.title|default:"Course"|escapejs }} - {{ request.user.get_full_name|default:request.user.username|escapejs }}',
+                    exportOptions: { columns: [0, 1, 2, 3, 4] }
+                }
+            ],
+            responsive: true,
+            order: [[0, 'asc']],
+            columnDefs: [
+                {
+                    targets: [3, 4],
+                    render: function(data, type) {
+                        if (type === 'display') {
+                            if (!data || data === 'N/A') return 'N/A';
+                            try {
+                                const date = new Date(data);
+                                return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: 'numeric',
+                                    second: 'numeric'
+                                });
+                            } catch (e) {
+                                console.error('Date rendering error:', e);
+                                return 'N/A';
+                            }
+                        }
+                        return data || '1970-01-01T00:00:00Z';
+                    }
+                },
+                {
+                    targets: -1,
+                    orderable: false,
+                    searchable: false
+                }
+            ],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search lessons...",
+                emptyTable: "No lessons found for this course."
+            },
+            initComplete: function() {
+                $('.dataTables_filter input').addClass('form-control form-control-sm');
+                console.log('DataTable initialized');
+            }
+        });
+
+        // Inline editing for order column
+        $(document).on('click', '.editable-order', function() {
+            try {
+                const $cell = $(this);
+                if ($cell.find('input:not([type="hidden"])').length > 0) return; // Prevent multiple inputs
+                const currentValue = $cell.data('order') || 0;
+                const lessonId = $cell.closest('tr').data('lesson-id');
+                const $input = $('<input type="number" min="0" class="form-control form-control-sm">').val(currentValue);
+                $cell.find('.order-value').replaceWith($input);
+                $input.focus();
+
+                $input.on('blur', function() {
+                    const inputVal = $input.val();
+                    const newValue = isNaN(parseInt(inputVal)) ? currentValue : parseInt(inputVal);
+                    $cell.data('order', newValue);
+                    $cell.find('.order-input').val(newValue);
+                    $cell.html(`<span class="order-value">${newValue}</span><input type="hidden" name="order_${lessonId}" class="order-input" value="${newValue}">`);
+                    console.log(`Order updated for lesson ${lessonId}: ${newValue}`);
+                });
+
+                $input.on('keypress', function(e) {
+                    if (e.which === 13) {
+                        $input.blur();
+                    }
+                });
+            } catch (e) {
+                console.error('Inline editing error:', e);
+            }
+        });
+
+        // Edit lesson handler
+        $(document).on('click', '.edit-lesson-btn', function() {
+            try {
+                const lessonId = $(this).data('lesson-id');
+                const lessonTitle = $(this).data('lesson-title');
+                let lessonOrder = $(this).data('lesson-order');
+                lessonOrder = (lessonOrder !== undefined && !isNaN(parseInt(lessonOrder))) ? parseInt(lessonOrder) : 0;
+                $('#editLessonId').val(lessonId);
+                $('#editLessonTitle').val(lessonTitle);
+                $('#editLessonOrder').val(lessonOrder);
+                console.log('Edit button clicked for lesson:', lessonId, 'with order:', lessonOrder);
+                $('#editLessonOrder').prop('value', lessonOrder);
+            } catch (e) {
+                console.error('Edit button error:', e);
+            }
+        });
+
+        // Delete lesson handler
+        $(document).on('click', '.delete-lesson-btn', function() {
+            try {
+                const lessonId = $(this).data('lesson-id');
+                const lessonTitle = $(this).data('lesson-title');
+                $('#lessonTitle').text(lessonTitle);
+                $('#deleteLessonForm').attr('action', `{% url 'teacher:delete_lesson' 0 %}`.replace('0', lessonId));
+                console.log('Delete button clicked for lesson:', lessonId);
+            } catch (e) {
+                console.error('Delete button error:', e);
+            }
+        });
+    } catch (e) {
+        console.error('DataTable initialization error:', e);
+    }
+});
+</script>
+{% endblock %}

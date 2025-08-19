@@ -1,0 +1,572 @@
+{% extends "user/base.html" %}
+{% load static %}
+
+{% block content %}
+<audio id="audio-correct" preload="auto">
+    <source src="/media/audio/correct.mp3" type="audio/mpeg">
+</audio>
+<audio id="audio-wrong" preload="auto">
+    <source src="/media/audio/ah.mp3" type="audio/mpeg">
+</audio>
+<div class="container pt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{% url 'student_courses' %}">Home</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <span>Revision</span>
+            </li>
+        </ol>
+    </nav>
+</div>
+
+<div class="container mt-4">
+    <div class="title-row">
+        <h2>Revision</h2>
+    </div>  
+    <div class="row">
+        <!-- Left Column: Welcome Block (8 columns) -->
+        <div class="col-12 col-md-8 mb-4">
+            <div id="welcomeBlock" class="text-center welcome-block p-4 mb-2 rounded">         
+                {% if first_course %}
+                    {% if first_course.revision_items_count > 0 %}
+                        <h4 id="courseTitle">{{ first_course.title|escape }}</h4>
+                        <p id="itemCount">There are <strong>{{ first_course.revision_items_count }}</strong> items due for revision.</p>
+                        <button id="startButton" class="btn btn-success btn-lg mt-3">Start Revision</button>
+                    {% else %}
+                        <h4 id="courseTitle">{{ first_course.title|escape }}</h4>
+                        <p id="itemCount">No items are due for revision at this moment.</p>
+                        <p>You can do an overall revision of all items in this course.</p>
+                        <button id="startOverallButton" class="btn btn-primary btn-lg mt-3">Start Revision</button>
+                    {% endif %}
+                {% else %}
+                    <div class="alert alert-info">
+                        There are no items due for revision at this moment.
+                        <br><a href="{% url 'student_courses' %}" class="alert-link">Go back to your courses</a>
+                    </div>
+                {% endif %}
+            </div>
+            <!-- Revision Container -->
+            <div id="revisionContainer" class="flashcard-container d-none">
+                {% if first_course %}
+                <form id="revisionForm" method="post" action="{% url 'submit_revision' course_id=first_course.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="responses" id="responses">
+                    <input type="hidden" name="is_completed" id="is_completed" value="false">
+                </form>
+                <div id="questions" class="questions-wrapper position-relative">
+                    {% for item in first_course.revision_items %}
+                    <div class="question-card d-none" 
+                         data-item-id="{{ item.id }}"
+                         data-item-successes="{{ item.successes|default:0 }}"
+                         data-item-correctanswer="{{ item.answer|escapejs }}"
+                         data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
+                         data-item-next1="{{ item.next_1|default:1 }}"
+                         data-item-next2="{{ item.next_2|default:1 }}"
+                         data-item-reviseat="{{ item.revise_at|default:'' }}"
+                         data-item-continuerevision="{% if item.continue_revision %}true{% else %}false{% endif %}"
+                         style="min-height: 45vh;">
+                        <div class="question-content position-relative">
+                            <div class="question-text fs-5 mb-2">
+                                {{ item.question|safe }}
+                            </div>
+                            {% if item.image %}
+                            <img src="{{ item.image }}" class="img-fluid" alt="Question image" style="max-height: 200px; object-fit: cover;">
+                            {% endif %}
+                            {% if item.audio %}
+                            <div class="position-absolute top-0 end-0">
+                                <i class="bi bi-volume-up fs-2 text-primary" style="cursor: pointer;"></i>
+                            </div>
+                            <audio class="d-none" preload="auto">
+                                <source src="{{ item.audio }}" type="audio/mpeg">
+                            </audio>
+                            {% endif %}
+                        </div>
+                        <div class="answer-buttons row g-2 mt-0">
+                            <div class="col-12 text-end mb-1">
+                                <a href="#" class="skip-revision">Skip future revision</a>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-primary w-100 answer-btn"></button>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-primary w-100 answer-btn"></button>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-primary w-100 answer-btn"></button>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-primary w-100 answer-btn"></button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                <!-- Feedback Modal -->
+                <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-body text-center">
+                                <h4 class="modal-title mb-3" id="feedbackResult"></h4>
+                                <p id="correctAnswerText"></p>
+                                <div id="progressIcons" class="mb-3">
+                                    <div class="d-flex justify-content-center align-items-center gap-1">
+                                        <div class="progress-icons"></div>
+                                        <span class="ms-2 correct-count">0/10</span>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-center gap-2">
+                                    <button type="button" class="btn btn-primary" id="continueButton">Continue</button>
+                                    <button type="button" class="btn btn-secondary" id="stopButton">Stop</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            
+                <!-- Skip Revision Confirmation Modal -->
+                <div class="modal fade" id="skipConfirmationModal" tabindex="-1" aria-labelledby="skipConfirmationModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-body text-center">
+                                <h4 class="modal-title mb-3">Skip Revision</h4>
+                                <p>Do you want to skip this item in future revisions?</p>
+                                <div class="d-flex justify-content-center gap-2">
+                                    <button type="button" class="btn btn-primary" id="skipConfirmButton">Yes</button>
+                                    <button type="button" class="btn btn-secondary" id="skipCancelButton">No</button>
+                                </div>        
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>            
+        </div>
+        <!-- Right Column: Course List (4 columns) -->
+        <div class="col-12 col-md-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">My Courses</h6>
+                </div>
+                <div class="card-body p-0">
+                    {% if courses %}
+                    <ul class="list-group list-group-flush">
+                        {% for course in courses %}
+                        <li class="list-group-item course-item {% if course.id == first_course.id %}active{% endif %}"
+                            data-course-id="{{ course.id }}"
+                            data-title="{{ course.title|escapejs }}"
+                            data-item-count="{{ course.revision_items_count|default:0 }}">
+                            <a href="{% url 'revision' course_id=course.id %}" class="text-decoration-none d-flex justify-content-between course-link mt-1 mb-1">
+                                {{ course.title }} <span class="badge bg-primary ms-2">{{ course.revision_items_count|default:0 }}</span>
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="p-3 text-muted">No courses available.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+  
+<style>
+.welcome-block {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+.question-card {
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+.question-text {
+    margin-right: 40px;
+}
+.answer-buttons button {
+    white-space: normal;
+    min-height: 60px;
+}
+.correct-answer {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+}
+.incorrect-answer {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+}
+.bi-volume-up {
+    color: #0d6efd;
+    cursor: pointer;
+}
+.bi-volume-up:hover {
+    opacity: 0.8;
+}
+.progress-icon {
+    font-size: 1em;
+    margin: 0 2px;
+}
+.course-item {
+    cursor: pointer;
+}
+.course-item.active {
+    background-color: #e7f1ff;
+    border-left: 3px solid #007bff !important;
+    font-weight: 500;
+}
+.course-link {
+    color: #212529;
+}
+.course-link:hover {
+    color: #0d6efd;
+}
+.skip-revision {
+    display: block;
+    font-size: 1em;
+    text-decoration: none;
+}
+.skip-revision:hover {
+    text-decoration: underline;
+}
+#skipConfirmationModal .modal-footer {
+    justify-content: center;
+}
+#skipConfirmationModal .btn {
+    min-width: 100px;
+}
+</style>
+
+<script>
+$(document).ready(function() {
+    let dueItems = [];
+    let otherItems = [];
+    let revisedItems = [];
+    let currentItem = null;
+    let correctCount = 0;
+    const MAX_ITEMS_PER_ROUND = 10;
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    function initializeLists() {
+        dueItems = [];
+        otherItems = [];
+        revisedItems = [];
+        correctCount = 0;
+
+        const now = new Date();
+        $('.question-card').each(function() {
+            const $card = $(this);
+            const reviseAt = $card.data('item-reviseat');
+            const continueRevision = String($card.data('item-continuerevision')) === 'true';
+            const item = {
+                id: $card.data('item-id'),
+                successes: parseInt($card.data('item-successes') || 0),
+                is_master: $card.data('item-is-master') === 'true',
+                correctAnswer: $card.data('item-correctanswer'),
+                next_1: parseInt($card.data('item-next1') || 1),
+                next_2: parseInt($card.data('item-next2') || 1),
+                revise_at: reviseAt || null,
+                continue_revision: continueRevision,
+                element: this
+            };
+
+            if (reviseAt && new Date(reviseAt) <= now && continueRevision) {
+                dueItems.push(item);
+            } else if (continueRevision) {
+                otherItems.push(item);
+            }
+        });
+
+        // Sort due items by revise_at (earliest first)
+        dueItems.sort((a, b) => {
+            if (!a.revise_at) return 1;
+            if (!b.revise_at) return -1;
+            return new Date(a.revise_at) - new Date(b.revise_at);
+        });
+
+        // If no due items, shuffle other items to randomize order
+        if (dueItems.length === 0) {
+            otherItems = shuffleArray(otherItems);
+        } else {
+            // Otherwise, sort other items by successes (fewest first)
+            otherItems.sort((a, b) => a.successes - b.successes || a.id - b.id);
+        }
+
+        updateProgressIcons();
+        dueItems.concat(otherItems).forEach(item => reshuffleOptions(item));
+    }
+
+    function processNextItem() {
+        if (revisedItems.length >= MAX_ITEMS_PER_ROUND) {
+            saveProgress(true);
+            return;
+        }
+
+        // First try to get a due item
+        if (dueItems.length > 0) {
+            currentItem = dueItems.shift();
+        } else if (otherItems.length > 0) {
+            // If no due items, get from other items
+            currentItem = otherItems.shift();
+            // Push back to end of otherItems to cycle through them
+            otherItems.push(currentItem);
+        } else {
+            // If no items left, save progress
+            saveProgress(true);
+            return;
+        }
+
+        if (currentItem) {
+            showItem(currentItem);
+            $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
+        } else {
+            console.warn('No current item to show');
+            saveProgress(true);
+        }
+    }
+
+    function showItem(item) {
+        console.log('Showing item:', item.id);
+        $('.question-card').addClass('d-none');
+        $(item.element).removeClass('d-none');
+        const audioElement = $(item.element).find('audio')[0];
+        if (audioElement) {
+            audioElement.currentTime = 0;
+            audioElement.play().catch(error => console.error('Audio playback failed:', error));
+        }
+    }
+
+    function reshuffleOptions(item) {
+        const allItems = $('.question-card').map(function() {
+            return {
+                answer: $(this).data('item-correctanswer')
+            };
+        }).get();
+        const correctAnswer = item.correctAnswer;
+        let wrongAnswers = allItems
+            .map(i => i.answer)
+            .filter(answer => answer !== correctAnswer && answer);
+        if (wrongAnswers.length > 3) {
+            wrongAnswers = shuffleArray(wrongAnswers).slice(0, 3);
+        } else if (wrongAnswers.length < 3) {
+            const placeholders = ["Option A", "Option B", "Option C"];
+            wrongAnswers = wrongAnswers.concat(
+                placeholders.slice(0, 3 - wrongAnswers.length)
+            );
+        }
+        const options = [correctAnswer, ...wrongAnswers];
+        shuffleArray(options);
+        const $buttons = $(item.element).find('.answer-btn');
+        $buttons.each(function(index) {
+            $(this).text(options[index]);
+            $(this).data('correct', options[index] === correctAnswer);
+            $(this).removeClass('selected-answer correct-answer incorrect-answer');
+        });
+    }
+
+    function updateProgressIcons() {
+        const progressIcons = $('.progress-icons').empty();
+        for (let i = 0; i < correctCount; i++) {
+            progressIcons.append('<i class="bi bi-check-circle-fill progress-icon text-success"></i>');
+        }
+        for (let i = correctCount; i < MAX_ITEMS_PER_ROUND; i++) {
+            progressIcons.append('<i class="bi bi-circle progress-icon text-secondary"></i>');
+        }
+        $('.correct-count').text(`${correctCount}/${MAX_ITEMS_PER_ROUND}`);
+    }
+
+    function showFeedback(isCorrect, correctAnswer) {
+        const modal = $('#feedbackModal');
+        modal.find('#feedbackResult').text(isCorrect ? 'Correct!' : 'Incorrect');
+        modal.find('#correctAnswerText').html(isCorrect ? '' : `Correct answer: <strong>${correctAnswer}</strong>`);
+        updateProgressIcons();
+
+        if (revisedItems.length >= MAX_ITEMS_PER_ROUND) {
+            modal.find('#continueButton').hide();
+            modal.find('#stopButton').text('Finish').show().off('click').on('click', () => {
+                console.log('Finish button clicked');
+                saveProgress(true);
+                modal.modal('hide');
+            });
+        } else if (isCorrect) {
+            modal.find('#continueButton').text('Continue').show().off('click').on('click', () => {
+                modal.modal('hide');
+                processNextItem();
+            });
+            modal.find('#stopButton').text('Stop').show().off('click').on('click', () => {
+                console.log('Stop button clicked');
+                saveProgress();
+                modal.modal('hide');
+            });
+        } else {
+            modal.find('#continueButton').text('Try Again').show().off('click').on('click', () => {
+                modal.modal('hide');
+                reshuffleOptions(currentItem);
+                showItem(currentItem);
+            });
+            modal.find('#stopButton').text('Stop').show().off('click').on('click', () => {
+                console.log('Stop button clicked');
+                saveProgress();
+                modal.modal('hide');
+            });
+        }
+        modal.modal('show');
+    }
+
+    function saveProgress(isCompleted = false) {
+        const responses = revisedItems.map(item => ({
+            student_item_id: item.id,
+            successes: item.successes,
+            next_1: item.next_1,
+            next_2: item.next_2,
+            revise_at: item.revise_at,
+            continue_revision: item.continue_revision
+        }));
+
+        $('#responses').val(JSON.stringify(responses));
+        $('#is_completed').val(isCompleted);
+
+        $.ajax({
+            url: $('#revisionForm').attr('action'),
+            method: 'POST',
+            data: $('#revisionForm').serializeArray(),
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val()
+            },
+            dataType: 'json',
+            success: function(response) {
+                console.log('Success response:', response);
+                if (response.status === 'success') {
+                    $('#itemCount').html(`There are <strong>${response.stats.remaining_items}</strong> items due for revision.`);
+                    $('#welcomeBlock').prepend(
+                        `<div class="alert alert-success mb-3">${response.message}</div>`
+                    );
+                    $('#revisionContainer').addClass('d-none');
+                    $('#welcomeBlock').removeClass('d-none');
+                    if (response.redirect_url) {
+                        window.location.href = response.redirect_url;
+                    }
+                } else {
+                    console.error('Server error:', response);
+                    alert('Error saving progress: ' + (response.message || 'Unknown error'));
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX Error:', { xhr: xhr, status: status, error: error });
+                console.log('Response Text:', xhr.responseText);
+                alert('Error saving progress: ' + (xhr.responseJSON?.message || 'Unknown error'));
+            }
+        });
+    }
+
+    function handleAnswer(isCorrect, $button) {
+        const audio = isCorrect ? document.getElementById('audio-correct') : document.getElementById('audio-wrong');
+        audio.play();
+        $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
+        $button.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'));
+        
+        if (isCorrect) {
+            correctCount++;
+            currentItem.successes += 1;
+            
+            // Only update next_1, next_2 and revise_at if current time is greater than revise_at
+            const now = new Date();
+            const reviseAt = currentItem.revise_at ? new Date(currentItem.revise_at) : null;
+            
+            if (!reviseAt || now > reviseAt) {
+                // Update the intervals only if it's time to revise
+                temp = currentItem.next_2;
+                currentItem.next_2 = currentItem.next_1 + currentItem.next_2;
+                currentItem.next_1 = temp;
+                
+                const newReviseAt = new Date(now.setDate(now.getDate() + currentItem.next_2));
+                currentItem.revise_at = newReviseAt.toISOString();
+            }
+            
+            currentItem.is_master = currentItem.successes >= 3;
+            revisedItems.push(currentItem);
+            showFeedback(isCorrect, currentItem.correctAnswer);
+        } else {
+            // Push incorrect item back to its respective list
+            if (currentItem.revise_at && new Date(currentItem.revise_at) <= new Date()) {
+                dueItems.unshift(currentItem);
+            } else {
+                otherItems.unshift(currentItem);
+            }
+            showFeedback(isCorrect, currentItem.correctAnswer);
+        }
+    }
+
+    $('#startButton').click(function() {
+        console.log('Start button clicked');
+        initializeLists();
+        $('#welcomeBlock').addClass('d-none');
+        $('#revisionContainer').removeClass('d-none');
+        processNextItem();
+    });
+
+    $('#startOverallButton').click(function() {
+        console.log('Start overall button clicked');
+        initializeLists();
+        $('#welcomeBlock').addClass('d-none');
+        $('#revisionContainer').removeClass('d-none');
+        processNextItem();
+    });
+
+    $(document).on('click', '.answer-btn', function() {
+        const isCorrect = $(this).data('correct');
+        handleAnswer(isCorrect, $(this));
+    });
+
+    $(document).on('click', '.bi-volume-up', function() {
+        const audioElement = $(this).closest('.question-content').find('audio')[0];
+        if (audioElement) {
+            audioElement.currentTime = 0;
+            audioElement.play().catch(error => console.error('Audio click error:', error));
+        }
+    });
+
+    $(document).on('click', '.skip-revision', function(e) {
+        e.preventDefault();
+        console.log('Skip-revision clicked');
+        if (currentItem) {
+            $('#skipConfirmationModal').modal('show');
+        }
+    });
+
+    $('#skipConfirmButton').click(function() {
+        if (currentItem) {
+            currentItem.continue_revision = false;
+            revisedItems.push(currentItem);
+            $(currentItem.element).attr('data-item-continuerevision', 'false');   
+        }
+        $('#skipConfirmationModal').modal('hide');
+        processNextItem();
+    });
+
+    $('#skipCancelButton').click(function() {
+        $('#skipConfirmationModal').modal('hide');
+        console.log('Skip canceled');
+    });
+
+    $('#stopButton').click(function() {
+        console.log('Stop button clicked');
+        saveProgress();
+    });
+});
+</script>
+{% endblock %}

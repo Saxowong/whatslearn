@@ -1,0 +1,257 @@
+{% extends "user/base.html" %}
+{% load static %}
+
+{% block content %}
+
+<script type="text/javascript">
+    var webSdkScript = document.createElement('script');
+    webSdkScript.src = 'https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0-beta.10/libs/cn/index.js';
+    document.head.appendChild(webSdkScript);
+    webSdkScript.onload = function () {
+      new CozeWebSDK.WebChatClient({
+        "config": {
+          "type": "app",
+          "appInfo": {
+            "appId": "7516709727695978508",
+            "workflowId": ""
+          }
+        },
+        "auth": {
+          "type": "token",
+          "token": "pat_0MG7hqpA9Ea18fTNLYXd2h4UQdhXQ75u4am7fzKNS0kh967dcibktJ848GIp0V80",
+          onRefreshToken: function () {
+            return "pat_0MG7hqpA9Ea18fTNLYXd2h4UQdhXQ75u4am7fzKNS0kh967dcibktJ848GIp0V80"
+          }
+        }
+      });
+    }
+</script>
+    
+<div class="container mt-5">
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% endif %} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Manage Courses</h2>
+        <a href="{% url 'teacher:edit_course' 0 %}" class="btn btn-success">
+            <i class="bi bi-plus-lg"></i> New Course
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <table id="coursesTable" class="table table-striped" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>Course Title</th>
+                        <th>Teacher</th>
+                        <th>Category</th>
+                        <th>Lessons</th>
+                        <th>Publish?</th>
+                        <th>Created At</th>
+                        <th>Updated At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for course in courses %}
+                    <tr>
+                        <td><a href="{% url 'teacher:manage_lessons' course.id %}">{{ course.title }}</a></td>
+                        <td>{{ course.teacher.user.get_full_name|default:course.teacher.user.username }}</td>
+                        <td>{{ course.category.name|default:course.category }}</td>
+                        <td>{{ course.lesson_count|default:0 }}</td>
+                        <td>
+                            <input type="checkbox" class="form-check-input" id="publish_{{ course.id }}" {% if course.is_published %}checked{% endif %} disabled>
+                        </td>
+                        <td data-order="{{ course.created_at|date:'c' }}">{{ course.created_at|date:"Y-m-d H:i:s" }}</td>
+                        <td data-order="{{ course.updated_at|date:'c' }}">{{ course.updated_at|date:"Y-m-d H:i:s" }}</td>
+                        <td>
+                            <a href="{% url 'teacher:edit_course' course.id %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'teacher:manage_lessons' course.id %}" class="btn btn-sm btn-info">
+                                <i class="bi bi-list-check"></i>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-warning delete-course-btn" 
+                                    data-course-id="{{ course.id }}" data-course-title="{{ course.title|escapejs }}"
+                                    data-bs-toggle="modal" data-bs-target="#deleteCourseModal">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                        <tr>
+                            <td>No courses found</td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteCourseModal" tabindex="-1" aria-labelledby="deleteCourseModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteCourseModalLabel">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="deleteCourseForm" method="POST" action="">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        Are you sure you want to delete the course "<span id="courseTitle"></span>"?
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="confirmDeleteCourseBtn">Delete</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<!-- DataTables CSS -->
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+<style>
+    .badge {
+        font-size: 0.9em;
+        min-width: 2.5em;
+        padding: 0.3em 0.6em;
+    }
+    th.sorting:after, th.sorting_asc:after, th.sorting_desc:after {
+        opacity: 1 !important;
+    }
+    .dataTables_wrapper .dataTables_filter input {
+        margin-left: 0.5em;
+    }
+    .form-check-input:disabled {
+        border: 1px solid #666;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<!-- DataTables JS -->
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    // Initialize DataTables
+    $('#coursesTable').DataTable({
+        dom: '<"top"<"row"<"col-md-6"B><"col-md-6"f>>>rt<"bottom"<"row"<"col-md-6"i><"col-md-6"p>>>',
+        buttons: [
+            {
+                extend: 'excelHtml5',
+                className: 'btn btn-sm btn-outline-success',
+                exportOptions: { columns: [0, 1, 2, 3, 4, 5, 6] }
+            },
+            {
+                extend: 'pdfHtml5',
+                className: 'btn btn-sm btn-outline-danger',
+                title: 'My Courses - {{ request.user.get_full_name|escapejs }}',
+                exportOptions: { columns: [0, 1, 2, 3, 4, 5, 6] }
+            }
+        ],
+        responsive: true,
+        order: [[5, 'desc']],
+        columnDefs: [
+            {
+                targets: 3, // Lessons column
+                type: 'num',
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return `<span class="badge bg-primary rounded-pill">${data}</span>`;
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 4, // Publish? column
+                type: 'html',
+                render: function(data, type, row) {
+                    let isPublished = row[4];
+                    if (typeof isPublished !== 'boolean') {
+                        isPublished = data === '1' || data === true || data.includes('checked');
+                    }
+                    if (type === 'display') {
+                        return `<input type="checkbox" class="form-check-input" ${isPublished ? 'checked' : ''} disabled>`;
+                    }
+                    return isPublished ? 'Yes' : 'No';
+                }
+            },
+            {
+                targets: [5, 6], // Created At, Updated At
+                type: 'date',
+                render: function(data, type, row, meta) {
+                    if (type === 'display') {
+                        try {
+                            const date = new Date(data);
+                            if (isNaN(date.getTime())) return 'N/A';
+                            return date.toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: 'numeric',
+                                second: 'numeric'
+                            });
+                        } catch (e) {
+                            return 'Invalid Date';
+                        }
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: -1, // Actions column
+                orderable: false,
+                searchable: false
+            }
+        ],
+        language: {
+            search: "_INPUT_",
+            searchPlaceholder: "Search courses...",
+        },
+        initComplete: function() {
+            $('.dataTables_filter input').addClass('form-control form-control-sm');
+        }
+    });
+
+    // Handle delete button click to populate modal
+    $(document).on('click', '.delete-course-btn', function() {
+        try {
+            const courseId = $(this).data('course-id');
+            const courseTitle = $(this).data('course-title');
+            $('#courseTitle').text(courseTitle);
+            $('#deleteCourseForm').attr('action', `{% url 'teacher:delete_course' 0 %}`.replace('0', courseId));
+            $('#deleteCourseModal').modal('show');
+        } catch (e) {
+            console.error('Delete course error:', e);
+        }
+    });
+});
+</script>
+{% endblock %}

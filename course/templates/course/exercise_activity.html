@@ -1,0 +1,577 @@
+{% extends "course/activity_detail.html" %}
+{% load static %}
+
+{% block activity_content %}
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+<audio id="audio-correct" preload="auto">
+    <source src="/media/audio/correct.mp3" type="audio/mpeg">
+</audio>
+<audio id="audio-wrong" preload="auto">
+    <source src="/media/audio/ah.mp3" type="audio/mpeg">
+</audio>
+
+<div class="card">
+    <div class="card-body">
+        <div class="activity-content">
+<!-- Welcome Block with Progress Bar -->
+            <div id="welcomeBlock" class="text-center welcome-block p-3 mb-2 rounded">
+                <!-- Progress Bar Section -->
+                <div class="activity-description mb-5 text-start">
+                    {{ activity.html_content|safe }}
+                </div>
+                <div class="progress-container mb-5">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Mastery Progress</span>
+                        <span id="masteredCount">{{ mastered_items_count }} / {{ items|length }}</span>
+                    </div>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-primary" 
+                            role="progressbar" 
+                            style="width: {% widthratio mastered_items_count items|length 100 %}%" 
+                            aria-valuenow="{% widthratio mastered_items_count items|length 100 %}" 
+                            aria-valuemin="0" 
+                            aria-valuemax="100">
+                            <span class="progress-percentage" id="overallProgress">{% widthratio mastered_items_count items|length 100 %}%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="startButton" class="btn btn-success btn-lg">Start Exercise</button>
+            </div>
+            <!-- Exercise Container -->
+            <div id="exerciseContainer" class="flashcard-container d-none">
+                <form id="exerciseForm" method="post" action="{% url 'course:submit_activity' activity.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="responses" id="responses">
+                    <input type="hidden" name="is_completed" id="is_completed" value="false">
+                </form>
+                <div id="questions" class="questions-wrapper position-relative">
+                    {% for item in items %}
+                    <div class="question-card d-none" 
+                        data-item-id="{{ item.id }}"
+                        data-item-successes="{{ item.successes|default:0 }}"
+                        data-item-correctAnswer="{{ item.answer }}"
+                        data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
+                        style="min-height: 45vh;">
+                        <div class="question-content mb-2 position-relative">
+                            <div class="question-text fs-5 mb-2">
+                                {{ item.question }}
+                            </div>
+                            {% if item.image %}
+                            <img src="{{ item.image.url }}" class="img-fluid" alt="Question image" style="max-height: 200px; object-fit: cover;">
+                            {% endif %}
+                            {% if item.audio %}
+                            <div class="position-absolute top-0 end-0 mt-2">
+                                <i class="bi bi-volume-up fs-2 text-primary" style="cursor: pointer;"></i>
+                            </div>
+                            <audio class="d-none" preload="auto">
+                                <source src="{{ item.audio.url }}" type="audio/mpeg">
+                            </audio>
+                            {% endif %}
+                        </div>
+                        <div class="answer-buttons row g-2 mt-0">
+                            <div class="col-12 text-end mb-1">
+                                <a href="#" class="not-sure-link">Not Sure?</a>
+                            </div>
+                            {% for option in item.options %}
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-primary w-100 answer-btn"
+                                        data-correct="{% if option == item.answer %}true{% else %}false{% endif %}">
+                                    {{ option }}
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <!-- Modal for fireworks effect -->
+            <!-- Feedback Modal -->
+            <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content" style="position: relative;">
+                        
+                            <div class="modal-body text-center">
+                            <h4 class="modal-title mb-3" id="feedbackResult"></h4>
+                            <p id="correctAnswerText"></p>
+                            <div id="progressIcons" class="modal-body mb-3">
+                                <div class="d-flex justify-content-center align-items-center gap-1">
+                                    <div class="progress-icons"></div>
+                                    <span class="ms-2 correct-count">0/10</span>
+                                </div>
+                            </div>     
+                            <div class="d-flex justify-content-center gap-2">
+                                <button type="button" class="btn btn-primary" id="continueButton">Continue</button>
+                                <button type="button" class="btn btn-secondary" id="stopButton">Stop</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.not-sure-link {
+    display: block;
+    font-size: 1em;
+    text-decoration: none;
+}
+#questions {
+    position: relative;
+}
+.progress-icon {
+    color: #28a745;
+    font-size: 1em;
+    margin: 0 2px;
+}
+.not-sure-link:hover {
+    text-decoration: underline;
+}
+.welcome-block {
+    max-width: 800px;
+    margin: 0 auto;
+}
+.question-card {
+    min-height: 250px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.question-content {
+    position: relative;
+    padding-top: 10px;
+}
+.question-text {
+    margin-right: 40px;
+}
+.answer-buttons button {
+    white-space: normal;
+    height: 100%;
+    min-height: 60px;
+}
+.correct-answer {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+}
+.incorrect-answer {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+}
+.progress-container {
+    max-width: 500px;
+    margin: 0 auto;
+}
+/* #exerciseContainer .modal {
+    position: fixed;
+    z-index: 1050;
+    width: 90%;
+    max-width: 500px;
+    margin: 0 auto;
+}
+#exerciseContainer .modal-dialog {
+    margin: 0 auto;
+}
+#exerciseContainer .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+} */
+.active-activity {
+    background-color: #cfe4fb;
+}
+.bi-volume-up {
+    color: #0d6efd;
+    transition: opacity 0.2s;
+}
+.bi-volume-up:hover {
+    opacity: 0.8;
+}
+.selected-answer {
+    border-width: 2px !important;
+}
+</style>
+<script>
+$(document).ready(function() {
+    let items = [];
+    let newList = [];
+    let workingList = [];
+    let masterList = [];
+    let currentItem = null;
+    let lastItemId = '';
+    let correctCount = 0;
+    const MAX_ITEMS_PER_ROUND = 10;
+    const WORKING_LIMIT = 3;
+    let currentRound = 0;
+    let sequentialCount = 0;
+    let selectionMode = 'sequential';
+
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+    
+    function triggerConfetti() {
+        // burst at center
+        var duration = 1 * 1000;
+        var end = Date.now() + duration;
+
+        (function frame() {
+            // Randomized bursts for nice effect
+            confetti({
+                particleCount: 5,
+                startVelocity: 25,
+                spread: 360,
+                ticks: 30,
+                origin: {
+                    x: Math.random(),
+                    // Y start just above modal center
+                    y: Math.random() / 2
+                }
+            });
+            if (Date.now() < end) {
+                requestAnimationFrame(frame);
+            }
+        }());
+    }
+
+    function initializeLists() {
+        items = $('.question-card').map(function() {
+            return {
+                id: $(this).data('item-id'),
+                successes: $(this).data('item-successes') || 0,
+                is_master: $(this).data('item-is-master') === 'true',
+                correctAnswer: $(this).data('item-correctAnswer'),
+                next_1: parseInt($(this).data('item-next1') || 1),
+                next_2: parseInt($(this).data('item-next2') || 1),
+                revise_at: $(this).data('item-reviseat') || null,
+                element: this
+            };
+        }).get();
+        newList = items.filter(item => item.successes === 0);
+        workingList = items.filter(item => item.successes >= 1 && item.successes <= 2);
+        masterList = items.filter(item => item.successes >= 3);
+        
+        workingList.sort((a, b) => a.successes - b.successes);
+        masterList.sort((a, b) => a.successes - b.successes);
+        
+        while (workingList.length < WORKING_LIMIT && newList.length > 0) {
+            workingList.push(newList.shift());
+        }
+        
+        correctCount = 0;
+        currentRound++;
+        sequentialCount = 0;
+        selectionMode = 'sequential';
+        lastItemId = '';
+        updateProgressIcons();
+    }
+
+    function processNextItem() {
+        if (correctCount >= MAX_ITEMS_PER_ROUND) {
+            saveProgress();
+            showRoundCompletion();
+            return;
+        }
+
+        if (sequentialCount >= 3) {
+            selectionMode = 'random';
+        } else {
+            selectionMode = 'sequential';
+        }
+
+        if (workingList.length > 0) {
+            if (selectionMode === 'sequential') {
+                let availableItems = workingList.filter(item => item.id !== lastItemId);
+                if (availableItems.length === 0 && workingList.length > 0) {
+                    availableItems = workingList;
+                }
+                if (availableItems.length > 0) {
+                    availableItems.sort((a, b) => a.successes - b.successes);
+                    currentItem = availableItems[0];
+                    workingList = workingList.filter(item => item.id !== currentItem.id);
+                    sequentialCount++;
+                }
+            } else {
+                let availableItems = workingList.filter(item => item.id !== lastItemId);
+                if (availableItems.length === 0 && workingList.length > 0) {
+                    availableItems = workingList;
+                }
+                if (availableItems.length > 0) {
+                    const shuffledWorkingList = shuffleArray([...availableItems]);
+                    currentItem = shuffledWorkingList[0];
+                    workingList = workingList.filter(item => item.id !== currentItem.id);
+                    sequentialCount++;
+                    if (sequentialCount >= 6) {
+                        sequentialCount = 0;
+                        selectionMode = 'sequential';
+                    }
+                }
+            }
+        } else if (masterList.length > 0) {
+            let availableItems = masterList.filter(item => item.id !== lastItemId);
+            if (availableItems.length === 0 && masterList.length > 0) {
+                availableItems = masterList;
+            }
+            if (availableItems.length > 0) {
+                const shuffledMasterList = shuffleArray([...availableItems]);
+                currentItem = shuffledMasterList[0];
+                masterList = masterList.filter(item => item.id !== currentItem.id);
+                sequentialCount++;
+                if (sequentialCount >= 6) {
+                    sequentialCount = 0;
+                    selectionMode = 'sequential';
+                }
+            }
+        } else {
+            initializeLists();
+            processNextItem();
+            return;
+        }
+
+        if (currentItem) {
+            lastItemId = currentItem.id;
+            showItem(currentItem);         
+        }        
+        $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
+    }
+
+    function showItem(item) {
+        $('.question-card').addClass('d-none');
+        $(item.element).removeClass('d-none');
+        // Play audio for the current question
+        const audioElement = $(item.element).find('audio')[0];
+        if (audioElement) {
+            audioElement.currentTime = 0; // Reset to start
+            audioElement.play().catch(function(error) {
+                console.error('Audio playback failed:', error);
+            });
+        }
+    }
+
+    function handleAnswer(isCorrect, $button) {
+        const audio = isCorrect ? document.getElementById('audio-correct') : document.getElementById('audio-wrong');
+        audio.play();
+        $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
+        if ($button) {
+            $button.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'));
+        }
+
+        currentItem.successes += isCorrect ? 1 : 0;
+
+        if (isCorrect) {
+            correctCount++;
+            
+            if (currentItem.successes >= 3) {
+                currentItem.is_master = true;
+                masterList.push(currentItem);
+                masterList.sort((a, b) => a.successes - b.successes);
+                
+                if (newList.length > 0 && workingList.length < WORKING_LIMIT) {
+                    workingList.push(newList.shift());
+                    workingList.sort((a, b) => a.successes - b.successes);
+                }
+            } else {
+                workingList.push(currentItem);
+                workingList.sort((a, b) => a.successes - b.successes);
+            }
+            
+            const correctAnswer = $(currentItem.element).data('item-correctanswer');
+            showFeedback(isCorrect, correctAnswer);
+        } else {
+            workingList.push(currentItem);
+            workingList.sort((a, b) => a.successes - b.successes);
+            
+            const correctAnswer = $(currentItem.element).data('item-correctanswer');
+            
+            showFeedback(isCorrect, correctAnswer, function() {
+                reshuffleOptions(currentItem);
+                showItem(currentItem);
+            });
+        }
+    }
+
+    function reshuffleOptions(item) {
+        const allItems = $('.question-card').map(function() {
+            return {
+                answer: $(this).data('item-correctanswer')
+            };
+        }).get();
+        
+        const correctAnswer = $(item.element).data('item-correctanswer');
+        let wrongAnswers = allItems
+            .map(i => i.answer)
+            .filter(answer => answer !== correctAnswer);
+        
+        if (wrongAnswers.length < 3) {
+            wrongAnswers = wrongAnswers.concat(
+                ["Option 1", "Option 2", "Option 3"].slice(0, 3 - wrongAnswers.length)
+            );
+        }
+        
+        const options = [correctAnswer].concat(wrongAnswers.slice(0, 3));
+        shuffleArray(options);
+        
+        const $buttons = $(item.element).find('.answer-btn');
+        $buttons.each(function(index) {
+            $(this).text(options[index]);
+            $(this).data('correct', options[index] === correctAnswer);
+            $(this).removeClass('selected-answer correct-answer incorrect-answer');
+        });
+    }
+
+    function showFeedback(isCorrect, correctAnswer, onCloseCallback) {
+        const modal = $('#feedbackModal');
+        modal.find('.modal-title').text(isCorrect ? 'Correct!' : 'Incorrect');
+        modal.find('#correctAnswerText').html(
+            isCorrect ? '' : `The correct answer was: <strong>${correctAnswer}</strong>`
+        );
+
+        updateProgressIcons();
+
+        // 🎉 Trigger confetti on correct
+        if (isCorrect) {
+            triggerConfetti();
+        }
+
+        if (correctCount >= MAX_ITEMS_PER_ROUND) {
+            modal.find('#stopButton')
+                .text('View Results')
+                .show()
+                .off('click')
+                .click(function() {
+                    saveProgress();
+                    modal.modal('hide');
+                    showRoundCompletion();
+                });
+            modal.find('#continueButton').hide();
+        } else if (isCorrect) {
+            modal.find('#continueButton')
+                .text('Continue')
+                .show()
+                .off('click')
+                .click(function() {
+                    modal.modal('hide');
+                    processNextItem();
+                });
+            modal.find('#stopButton').show();
+        } else {
+            modal.find('#continueButton')
+                .text('Try Again')
+                .show()
+                .off('click')
+                .click(function() {
+                    modal.modal('hide');
+                    if (onCloseCallback) onCloseCallback();
+                });
+            modal.find('#stopButton').show();
+        }
+
+        modal.modal('show');
+    }
+
+
+    function updateProgressIcons() {
+        const progressIcons = $('.progress-icons');
+        progressIcons.empty();
+        
+        for (let i = 0; i < correctCount; i++) {
+            progressIcons.append('<i class="bi bi-check-circle-fill progress-icon text-success"></i>');
+        }
+        
+        for (let i = correctCount; i < MAX_ITEMS_PER_ROUND; i++) {
+            progressIcons.append('<i class="bi bi-circle progress-icon text-secondary"></i>');
+        }
+        
+        $('.correct-count').text(`${correctCount}/${MAX_ITEMS_PER_ROUND}`);
+    }
+
+    function showRoundCompletion() {
+        $('#exerciseContainer').addClass('d-none');
+        $('#welcomeBlock').removeClass('d-none');
+        const masteredCount = items.filter(item => item.successes >= 3).length;
+        const totalItems = items.length;
+        $('#masteredCount').text(masteredCount);
+        $('#overallProgress').text(
+            Math.round((masteredCount / totalItems) * 100) + '%'
+        );
+    }
+
+    function saveProgress() {
+        const responses = items.map(item => ({
+            item_id: item.id,
+            successes: item.successes,
+            next_1: item.next_1,
+            next_2: item.next_2,
+            revise_at: item.revise_at
+        }));
+        
+        const isCompleted = items.every(item => item.successes >= 3);
+        $('#responses').val(JSON.stringify(responses));
+        $('#is_completed').val(isCompleted);
+        $('#exerciseForm').submit();        
+        $('#feedbackModal').modal('hide');
+    }
+
+    $('#startButton').click(function() {
+        initializeLists();
+        $('#welcomeBlock').addClass('d-none');
+        $('#exerciseContainer').removeClass('d-none');
+        processNextItem();
+    });
+    
+    $('#stopButton').click(function() {
+        saveProgress();
+    });
+    
+    $('.answer-btn').click(function() {
+        const isCorrect = $(this).data('correct') === true;
+        handleAnswer(isCorrect, $(this));
+    });
+
+    $('.not-sure-link').click(function(e) {
+        e.preventDefault();
+        console.log('Not Sure? clicked for item:', currentItem ? currentItem.id : 'none');
+        if (currentItem) {
+            const correctAnswer = $(currentItem.element).data('item-correctanswer');
+            workingList.push(currentItem);
+            workingList.sort((a, b) => a.successes - b.successes);
+            showFeedback(false, correctAnswer, function() {
+                reshuffleOptions(currentItem);
+                showItem(currentItem);
+            });
+        }
+    });
+
+    $('#continueButton').click(function() {
+        $('#feedbackModal').modal('hide');        
+        processNextItem();
+    });
+
+    $('#showResults').click(function() {
+        showRoundCompletion();
+    });
+
+    $('.bi-volume-up').click(function() {
+        const audioElement = $(this).closest('.question-content').find('audio')[0];
+        if (audioElement) {
+            audioElement.currentTime = 0;
+            audioElement.play().catch(function(error) {
+                console.error('Audio playback failed:', error);
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

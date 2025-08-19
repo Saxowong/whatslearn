@@ -1,0 +1,110 @@
+{% extends "user/base.html" %}
+
+{% block content %}
+<div class="container pt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{% url 'student_courses' %}">My Courses</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <span>Activities</span>
+            </li>
+        </ol>
+    </nav>
+</div>
+<div class="container mt-4">
+    <div class="title-row">
+        <h2 class="mb-0">{{ course.title }}</h2>
+    </div>  
+    <div class="accordion" id="lessonsAccordion">
+        {% for lesson in course.lessons.all %}
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading{{ lesson.id }}">
+                <button class="accordion-button"
+                        type="button" 
+                        data-bs-toggle="collapse" 
+                        data-bs-target="#collapse{{ lesson.id }}" 
+                        aria-expanded="true" 
+                        aria-controls="collapse{{ lesson.id }}">
+                    Lesson {{ forloop.counter }}: {{ lesson.title }}
+                </button>
+            </h2>
+            <div id="collapse{{ lesson.id }}" 
+                class="accordion-collapse collapse show" 
+                aria-labelledby="heading{{ lesson.id }}">
+                <div class="accordion-body p-0">
+                    <ul class="list-group">
+                        {% for activity in lesson.activities.all %}
+                        <a href="{% url 'course:activity_detail' activity.id %}" class="text-decoration-none">
+                            <li class="list-group-item activity-item">
+                                <div class="d-flex align-items-center">
+                                    <!-- Checkbox for completion status -->
+                                    <input type="checkbox" 
+                                        class="activity-checkbox me-2" 
+                                        data-activity-id="{{ activity.id }}"
+                                        {% if activity.activity_type == 'exercise' %}
+                                            {% if activity.student_progress == 100 %}checked{% endif %}
+                                        {% else %}
+                                            {% if activity.student_completed %}checked{% endif %}
+                                        {% endif %}
+                                        disabled>
+                                    
+                                    <!-- Item counter -->
+                                    <div class="me-3">{{ forloop.counter }}.</div>
+                                    
+                                    <!-- Content column -->
+                                    <div class="d-flex flex-column flex-grow-1">
+                                        <!-- Activity title -->
+                                        <div class="mb-1 activity-title">{{ activity.title }}</div>
+                                        <!-- Progress bar for exercise activities only -->
+                                        {% if activity.activity_type == 'exercise' %}
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="progress" style="height: 16px; width: 30%; min-width: 200px;">
+                                                <div class="progress-bar" 
+                                                    role="progressbar" 
+                                                    style="width: {{ activity.student_progress|floatformat:'0' }}%; 
+                                                            background-color: #007bff;
+                                                            display: flex; align-items: center; justify-content: center; position: relative;"
+                                                    aria-valuenow="{{ activity.student_progress|floatformat:'0' }}" 
+                                                    aria-valuemin="0" 
+                                                    aria-valuemax="100">
+                                                    <span style="color: white; font-size: 0.65rem; font-weight: bold;
+                                                                position: absolute; left: 50%; transform: translateX(-50%);">
+                                                        {{ activity.student_progress|floatformat:"0" }}%
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </li>
+                        </a>
+                        {% empty %}
+                        <li class="list-group-item text-muted">No activities in this lesson</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="alert alert-info">No lessons available for this course yet</div>
+        {% endfor %}
+    </div>
+
+
+</div>
+
+<style>
+.activity-item:hover {
+    background-color: #f8f9fa;
+}
+.activity-title {
+    color: #212529;
+}
+.activity-checkbox {
+    cursor: not-allowed;
+}
+</style>
+{% endblock %}
