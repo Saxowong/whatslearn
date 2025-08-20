@@ -513,28 +513,25 @@ def manage_items(request, activity_id):
     return render(request, "teacher/manage_items.html", context)
 
 
+
 @login_required
 def edit_item(request, activity_id, item_id):
     activity = get_object_or_404(Activity, id=activity_id)
     course = activity.lesson.course
     lesson = activity.lesson
     item = get_object_or_404(Item, id=item_id, activity=activity) if item_id else None
-
     if request.method == "POST":
         form = ItemForm(request.POST, request.FILES, instance=item)
         if form.is_valid():
             # Store old file information before saving
             old_image_path = item.image.path if item and item.image else None
             old_audio_path = item.audio.path if item and item.audio else None
-
             # Create media directory if needed
             media_path = os.path.join("courses", str(course.id), str(activity.id))
             full_media_path = os.path.join(settings.MEDIA_ROOT, media_path)
             os.makedirs(full_media_path, exist_ok=True)
-
             item = form.save(commit=False)
             item.activity = activity
-
             # Handle file uploads
             if "image" in request.FILES:
                 image_file = request.FILES["image"]
@@ -542,34 +539,30 @@ def edit_item(request, activity_id, item_id):
                 if old_image_path and os.path.exists(old_image_path):
                     try:
                         os.remove(old_image_path)
+                        logger.info(f"Deleted old image: {old_image_path}")
                     except Exception as e:
                         logger.error(f"Error deleting old image file: {str(e)}")
-                # Save new image
-                filename = (
-                    f"img_{uuid.uuid4().hex[:8]}{os.path.splitext(image_file.name)[1]}"
-                )
+                # Save new image with original filename
+                filename = os.path.basename(image_file.name)
                 item.image.save(os.path.join(media_path, filename), image_file)
-
             if "audio" in request.FILES:
                 audio_file = request.FILES["audio"]
                 # Delete old audio if exists
                 if old_audio_path and os.path.exists(old_audio_path):
                     try:
                         os.remove(old_audio_path)
+                        logger.info(f"Deleted old audio: {old_audio_path}")
                     except Exception as e:
                         logger.error(f"Error deleting old audio file: {str(e)}")
-                # Save new audio
-                filename = f"audio_{uuid.uuid4().hex[:8]}{os.path.splitext(audio_file.name)[1]}"
+                # Save new audio with original filename
+                filename = os.path.basename(audio_file.name)
                 item.audio.save(os.path.join(media_path, filename), audio_file)
-
             item.save()
-
             # Reorder items
             all_items = Item.objects.filter(activity=activity).order_by("order", "id")
             for index, itm in enumerate(all_items, start=1):
                 itm.order = index
                 itm.save()
-
             messages.success(
                 request,
                 f"Item '{item.title}' {'updated' if item_id else 'created'} successfully.",
@@ -588,7 +581,6 @@ def edit_item(request, activity_id, item_id):
         )
         form = ItemForm(instance=item, initial=initial)
         error = None
-
     return render(
         request,
         "teacher/edit_item.html",
@@ -600,7 +592,6 @@ def edit_item(request, activity_id, item_id):
             "form": form,
         },
     )
-
 
 @login_required
 def delete_item(request, item_id):

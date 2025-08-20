@@ -111,7 +111,7 @@ class Activity(models.Model):
     ]
     title = models.CharField(max_length=255)
     lesson = models.ForeignKey("Lesson", on_delete=models.CASCADE, related_name="activities")
-    activity_type = models.CharField(max_length=20, choices=ACTIVITY_TYPES)
+    activity_type = models.CharField(max_length=10, choices=ACTIVITY_TYPES)
     order = models.IntegerField(default=0)
     html_content = models.TextField(blank=True, null=True)
     video_embed_code = models.TextField(blank=True, null=True)
@@ -123,6 +123,12 @@ class Activity(models.Model):
         return self.title
 
 class Item(models.Model):
+    ITEM_TYPES = [
+        ("card", "Flash Card"),
+        ("mc", "Multiple Choice"),
+        ("blank", "Fill in the Blank"),
+    ]
+    item_type = models.CharField(max_length=10, choices=ITEM_TYPES, default="card")
     title = models.CharField(max_length=100)  # Title of the activity item
     question = models.TextField()  # Question associated with the activity item
     activity = models.ForeignKey(
@@ -133,7 +139,12 @@ class Item(models.Model):
     )  # To keep track of the order of items
     image = models.ImageField(upload_to=item_media_path, blank=True, null=True)
     audio = models.FileField(upload_to=item_media_path, blank=True, null=True, validators=[FileExtensionValidator(allowed_extensions=['mp3', 'wav', 'ogg', 'm4a'])])
-    answer = models.CharField(max_length=100)  # Answer to the question
+    answer = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
+    answer1 = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
+    answer2 = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
+    answer3 = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
+    answer4 = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

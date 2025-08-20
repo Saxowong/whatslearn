@@ -3,30 +3,7 @@
 
 {% block content %}
 
-<script type="text/javascript">
-    var webSdkScript = document.createElement('script');
-    webSdkScript.src = 'https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0-beta.10/libs/cn/index.js';
-    document.head.appendChild(webSdkScript);
-    webSdkScript.onload = function () {
-      new CozeWebSDK.WebChatClient({
-        "config": {
-          "type": "app",
-          "appInfo": {
-            "appId": "7516709727695978508",
-            "workflowId": ""
-          }
-        },
-        "auth": {
-          "type": "token",
-          "token": "pat_0MG7hqpA9Ea18fTNLYXd2h4UQdhXQ75u4am7fzKNS0kh967dcibktJ848GIp0V80",
-          onRefreshToken: function () {
-            return "pat_0MG7hqpA9Ea18fTNLYXd2h4UQdhXQ75u4am7fzKNS0kh967dcibktJ848GIp0V80"
-          }
-        }
-      });
-    }
-</script>
-    
+   
 <div class="container mt-5">
     {% if messages %}
     <div class="mb-3">
