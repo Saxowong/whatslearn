@@ -13,6 +13,9 @@
             <li class="breadcrumb-item">
                 <a href="{% url 'teacher:manage_activities' activity.lesson.id %}">Activities</a>
             </li>
+            <li class="breadcrumb-item">
+                <a href="{% url 'teacher:manage_items' activity.id %}">Items</a>
+            </li>
             <li class="breadcrumb-item active" aria-current="page">
                 Edit Item
             </li>
@@ -234,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateFieldVisibility() {
         var itemType = itemTypeSelect.value;
         // Reset visibility and required attributes
-        answerField.classList.remove('hidden');
+        answerField.classList.add('hidden');
         answer1Field.classList.add('hidden');
         answer2Field.classList.add('hidden');
         answer3Field.classList.add('hidden');
@@ -246,7 +249,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('id_answer4').required = false;
         if (itemType === 'card') {
             answerField.classList.remove('hidden');
-            document.getElementById('id_answer').required = true;
         } else if (itemType === 'mc') {
             answerField.classList.remove('hidden');
             answer1Field.classList.remove('hidden');

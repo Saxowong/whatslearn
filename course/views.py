@@ -725,17 +725,26 @@ def activity_view(request, activity_id):
             item.updated_at = student_item.updated_at if student_item else None
             item.next_1 = student_item.next_1 if student_item else 1
             item.next_2 = student_item.next_2 if student_item else 1
-            wrong_answers = [
-                i.answer for i in items if i.id != item.id and i.answer != item.answer
-            ]
-            if len(wrong_answers) < 3:
-                wrong_answers.extend(
-                    ["Alternative option 1", "Alternative option 2"][: 3 - len(wrong_answers)]
-                )
-            selected_wrong = sample(wrong_answers, 3)
-            options = [item.answer] + selected_wrong
-            shuffle(options)
-            item.options = options
+            if item.item_type == "mc":
+                # For MC, use answer1, answer2, answer3, answer4 as options
+                options = [item.answer1, item.answer2, item.answer3, item.answer4]
+                shuffle(options)  # Randomize the order
+                item.options = options
+                item.correct_answer = item.answer  # Store correct answer for template
+            else:
+                # For card/blank, use existing logic
+                wrong_answers = [
+                    i.answer for i in items if i.id != item.id and i.answer != item.answer
+                ]
+                if len(wrong_answers) < 3:
+                    wrong_answers.extend(
+                        ["Alternative option 1", "Alternative option 2"][: 3 - len(wrong_answers)]
+                    )
+                selected_wrong = sample(wrong_answers, 3)
+                options = [item.answer] + selected_wrong
+                shuffle(options)
+                item.options = options
+                item.correct_answer = item.answer
         context["items"] = items
         template_name = "course/exercise_activity.html"
     elif activity.activity_type == "video":
@@ -745,7 +754,6 @@ def activity_view(request, activity_id):
     else:
         template_name = "course/html_activity.html"
     return render(request, template_name, context)
-
 
 
 @require_POST

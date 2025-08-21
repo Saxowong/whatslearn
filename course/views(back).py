@@ -740,6 +740,8 @@ def activity_view(request, activity_id):
         template_name = "course/exercise_activity.html"
     elif activity.activity_type == "video":
         template_name = "course/video_activity.html"
+    elif activity.activity_type == "pdf":
+        template_name = "course/pdf_activity.html"
     else:
         template_name = "course/html_activity.html"
     return render(request, template_name, context)
