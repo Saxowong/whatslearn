@@ -126,7 +126,6 @@ class Item(models.Model):
     ITEM_TYPES = [
         ("card", "Flash Card"),
         ("mc", "Multiple Choice"),
-        ("blank", "Fill in the Blank"),
     ]
     item_type = models.CharField(max_length=10, choices=ITEM_TYPES, default="card")
     title = models.CharField(max_length=100)  # Title of the activity item

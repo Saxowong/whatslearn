@@ -8,14 +8,14 @@
 <audio id="audio-wrong" preload="auto">
     <source src="/media/audio/ah.mp3" type="audio/mpeg">
 </audio>
-<div class="card">
-    <div class="card-body">
+<div class="card" style="border: none;">
+    <div class="card-body" style="padding:0px;">
         <div class="activity-content">
             <!-- Welcome Block with Progress Bar -->
-            <div id="welcomeBlock" class="text-center welcome-block p-3 mb-2 rounded">
+            <div id="welcomeBlock" class="text-center welcome-block p-4 mb-2 rounded">
                 <!-- Progress Bar Section -->
                 <div class="activity-description mb-5 text-start">
-                    {{ activity.html_content|safe }}
+                    This exercise has {{activity.items.count}} questions.
                 </div>
                 <div class="progress-container mb-5">
                     <div class="d-flex justify-content-between mb-1">
@@ -47,12 +47,12 @@
                     <div class="question-card d-none"
                          data-item-id="{{ item.id }}"
                          data-item-successes="{{ item.successes|default:0 }}"
-                         data-item-correctAnswer="{{ item.correct_answer }}"
+                         data-item-correctAnswer="{{ item.correct_answer|default:'' }}"
                          data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
-                         style="min-height: 45vh;">
+                         style="min-height: 60vh;">
                         <div class="question-content mb-2 position-relative">
                             <div class="question-text fs-5 mb-2">
-                                {{ item.question }}
+                                {{ item.question|safe }}
                             </div>
                             {% if item.image %}
                             <img src="{{ item.image.url }}" class="img-fluid" alt="Question image" style="max-height: 200px; object-fit: cover;">
@@ -66,15 +66,16 @@
                             </audio>
                             {% endif %}
                         </div>
-                        <div class="answer-buttons row g-2 mt-0">
+                        <div class="answer-buttons row g-2 mt-2">
                             <div class="col-12 text-end mb-1">
                                 <a href="#" class="not-sure-link">Not Sure?</a>
                             </div>
                             {% for option in item.options %}
                             <div class="col-6">
                                 <button type="button" class="btn btn-outline-primary w-100 answer-btn"
+                                        data-option="{{ option|default:'' }}"
                                         data-correct="{% if option == item.correct_answer %}true{% else %}false{% endif %}">
-                                    {{ option }}
+                                    {{ option|default:'' }}
                                 </button>
                             </div>
                             {% endfor %}
@@ -127,12 +128,17 @@
 .welcome-block {
     max-width: 800px;
     margin: 0 auto;
+    min-height: 60vh;
+    border: 1px solid var(--bs-card-border-color);
 }
 .question-card {
     min-height: 250px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    border: 1px solid var(--bs-card-border-color);
+    border-radius: 0.25rem;
+    padding: 15px;
 }
 .question-content {
     position: relative;
@@ -140,6 +146,9 @@
 }
 .question-text {
     margin-right: 40px;
+}
+.answer-buttons {
+    margin-top: 10px;
 }
 .answer-buttons button {
     white-space: normal;
@@ -171,7 +180,16 @@
 .selected-answer {
     border-width: 2px !important;
 }
+.text-primary {
+    color: #0d6efd !important; /* Blue for correct answers */
+}
+.text-danger {
+    color: #dc3545 !important; /* Red for incorrect answers */
+}
 </style>
+
+{% block extra_js %}
+{{ block.super }}
 <script>
 $(document).ready(function() {
     let items = [];
@@ -187,6 +205,10 @@ $(document).ready(function() {
     let sequentialCount = 0;
     let selectionMode = 'sequential';
     function shuffleArray(array) {
+        if (!array || array.length <= 1) {
+            console.log('shuffleArray: Array is empty or has only one item, returning unchanged');
+            return array;
+        }
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [array[i], array[j]] = [array[j], array[i]];
@@ -214,17 +236,21 @@ $(document).ready(function() {
     }
     function initializeLists() {
         items = $('.question-card').map(function() {
+            const itemId = $(this).data('item-id');
             return {
-                id: $(this).data('item-id'),
+                id: itemId,
                 successes: $(this).data('item-successes') || 0,
-                is_master: $(this).data('item-is-master') === 'true',
-                correctAnswer: $(this).data('item-correctAnswer'),
-                next_1: parseInt($(this).data('item-next1') || 1),
-                next_2: parseInt($(this).data('item-next2') || 1),
-                revise_at: $(this).data('item-reviseat') || null,
+                is_master: $(this).data('item-is-master') === true,
+                correctAnswer: $(this).data('item-correctanswer') || '',
+                original_question: $(this).find('.question-text').html(),
                 element: this
             };
         }).get();
+        if (items.length === 0) {
+            console.error('No items available to initialize lists');
+            $('#welcomeBlock').html('<p class="text-danger">Error: No questions available for this activity.</p>');
+            return;
+        }
         newList = items.filter(item => item.successes === 0);
         workingList = items.filter(item => item.successes >= 1 && item.successes <= 2);
         masterList = items.filter(item => item.successes >= 3);
@@ -252,31 +278,28 @@ $(document).ready(function() {
             selectionMode = 'sequential';
         }
         if (workingList.length > 0) {
+            let availableItems = workingList.filter(item => item.id !== lastItemId);
+            if (availableItems.length === 0 && workingList.length > 0) {
+                availableItems = workingList;
+            }
+            if (availableItems.length === 0) {
+                console.error('No available items in workingList');
+                showRoundCompletion();
+                return;
+            }
             if (selectionMode === 'sequential') {
-                let availableItems = workingList.filter(item => item.id !== lastItemId);
-                if (availableItems.length === 0 && workingList.length > 0) {
-                    availableItems = workingList;
-                }
-                if (availableItems.length > 0) {
-                    availableItems.sort((a, b) => a.successes - b.successes);
-                    currentItem = availableItems[0];
-                    workingList = workingList.filter(item => item.id !== currentItem.id);
-                    sequentialCount++;
-                }
+                availableItems.sort((a, b) => a.successes - b.successes);
+                currentItem = availableItems[0];
+                workingList = workingList.filter(item => item.id !== currentItem.id);
+                sequentialCount++;
             } else {
-                let availableItems = workingList.filter(item => item.id !== lastItemId);
-                if (availableItems.length === 0 && workingList.length > 0) {
-                    availableItems = workingList;
-                }
-                if (availableItems.length > 0) {
-                    const shuffledWorkingList = shuffleArray([...availableItems]);
-                    currentItem = shuffledWorkingList[0];
-                    workingList = workingList.filter(item => item.id !== currentItem.id);
-                    sequentialCount++;
-                    if (sequentialCount >= 6) {
-                        sequentialCount = 0;
-                        selectionMode = 'sequential';
-                    }
+                const shuffledWorkingList = shuffleArray([...availableItems]);
+                currentItem = shuffledWorkingList[0];
+                workingList = workingList.filter(item => item.id !== currentItem.id);
+                sequentialCount++;
+                if (sequentialCount >= 6) {
+                    sequentialCount = 0;
+                    selectionMode = 'sequential';
                 }
             }
         } else if (masterList.length > 0) {
@@ -284,31 +307,41 @@ $(document).ready(function() {
             if (availableItems.length === 0 && masterList.length > 0) {
                 availableItems = masterList;
             }
-            if (availableItems.length > 0) {
-                const shuffledMasterList = shuffleArray([...availableItems]);
-                currentItem = shuffledMasterList[0];
-                masterList = masterList.filter(item => item.id !== currentItem.id);
-                sequentialCount++;
-                if (sequentialCount >= 6) {
-                    sequentialCount = 0;
-                    selectionMode = 'sequential';
-                }
+            if (availableItems.length === 0) {
+                console.error('No available items in masterList');
+                showRoundCompletion();
+                return;
+            }
+            const shuffledMasterList = shuffleArray([...availableItems]);
+            currentItem = shuffledMasterList[0];
+            masterList = masterList.filter(item => item.id !== currentItem.id);
+            sequentialCount++;
+            if (sequentialCount >= 6) {
+                sequentialCount = 0;
+                selectionMode = 'sequential';
             }
         } else {
             initializeLists();
+            if (items.length === 0) {
+                return;
+            }
             processNextItem();
             return;
         }
         if (currentItem) {
             lastItemId = currentItem.id;
             showItem(currentItem);
+        } else {
+            console.error('No current item selected');
+            showRoundCompletion();
         }
         $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
     }
     function showItem(item) {
         $('.question-card').addClass('d-none');
         $(item.element).removeClass('d-none');
-        // Play audio for the current question
+        $(item.element).find('.question-text').html(item.original_question);
+        console.log('Item ID:', item.id, 'Question:', item.original_question, 'Correct Answer:', item.correctAnswer, 'Options:', $(item.element).find('.answer-btn').map(function() { return $(this).data('option'); }).get());
         const audioElement = $(item.element).find('audio')[0];
         if (audioElement) {
             audioElement.currentTime = 0;
@@ -340,7 +373,7 @@ $(document).ready(function() {
                 workingList.sort((a, b) => a.successes - b.successes);
             }
             const correctAnswer = $(currentItem.element).data('item-correctanswer');
-            showFeedback(isCorrect, correctAnswer);
+            showFeedback(isCorrect, correctAnswer, processNextItem);
         } else {
             workingList.push(currentItem);
             workingList.sort((a, b) => a.successes - b.successes);
@@ -352,37 +385,19 @@ $(document).ready(function() {
         }
     }
     function reshuffleOptions(item) {
-        const allItems = $('.question-card').map(function() {
-            return {
-                answer: $(this).data('item-correctanswer')
-            };
-        }).get();
-        const correctAnswer = $(item.element).data('item-correctanswer');
         const buttons = $(item.element).find('.answer-btn');
-        const itemType = $(item.element).data('item-type'); // Assumes item_type is passed
-        let options;
-        if (itemType === 'mc') {
-            // For MC, reshuffle the original four options
-            options = $(item.element).find('.answer-btn').map(function() {
-                return $(this).text();
-            }).get();
-            shuffleArray(options);
-        } else {
-            // For card/blank, use existing logic
-            let wrongAnswers = allItems
-                .map(i => i.answer)
-                .filter(answer => answer !== correctAnswer);
-            if (wrongAnswers.length < 3) {
-                wrongAnswers = wrongAnswers.concat(
-                    ["Option 1", "Option 2", "Option 3"].slice(0, 3 - wrongAnswers.length)
-                );
-            }
-            options = [correctAnswer].concat(wrongAnswers.slice(0, 3));
-            shuffleArray(options);
+        const options = buttons.map(function() {
+            return $(this).data('option');
+        }).get();
+        if (options.length <= 1) {
+            console.log('reshuffleOptions: Not enough options to shuffle');
+            return;
         }
+        shuffleArray(options);
         buttons.each(function(index) {
-            $(this).text(options[index]);
-            $(this).data('correct', options[index] === correctAnswer);
+            $(this).text(options[index] || '');
+            $(this).data('option', options[index] || '');
+            $(this).data('correct', options[index] === item.correctAnswer);
             $(this).removeClass('selected-answer correct-answer incorrect-answer');
         });
     }
@@ -407,19 +422,9 @@ $(document).ready(function() {
                     showRoundCompletion();
                 });
             modal.find('#continueButton').hide();
-        } else if (isCorrect) {
-            modal.find('#continueButton')
-                .text('Continue')
-                .show()
-                .off('click')
-                .click(function() {
-                    modal.modal('hide');
-                    processNextItem();
-                });
-            modal.find('#stopButton').show();
         } else {
             modal.find('#continueButton')
-                .text('Try Again')
+                .text(isCorrect ? 'Continue' : 'Try Again')
                 .show()
                 .off('click')
                 .click(function() {
@@ -454,10 +459,7 @@ $(document).ready(function() {
     function saveProgress() {
         const responses = items.map(item => ({
             item_id: item.id,
-            successes: item.successes,
-            next_1: item.next_1,
-            next_2: item.next_2,
-            revise_at: item.revise_at
+            successes: item.successes
         }));
         const isCompleted = items.every(item => item.successes >= 3);
         $('#responses').val(JSON.stringify(responses));
@@ -467,6 +469,9 @@ $(document).ready(function() {
     }
     $('#startButton').click(function() {
         initializeLists();
+        if (items.length === 0) {
+            return;
+        }
         $('#welcomeBlock').addClass('d-none');
         $('#exerciseContainer').removeClass('d-none');
         processNextItem();
@@ -491,10 +496,6 @@ $(document).ready(function() {
             });
         }
     });
-    $('#continueButton').click(function() {
-        $('#feedbackModal').modal('hide');
-        processNextItem();
-    });
     $('.bi-volume-up').click(function() {
         const audioElement = $(this).closest('.question-content').find('audio')[0];
         if (audioElement) {
@@ -506,4 +507,6 @@ $(document).ready(function() {
     });
 });
 </script>
+{% endblock %}
+
 {% endblock %}

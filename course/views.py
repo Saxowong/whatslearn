@@ -38,6 +38,7 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 import json
+import re
 from random import sample, shuffle
 from .models import (
     Course,
@@ -725,16 +726,21 @@ def activity_view(request, activity_id):
             item.updated_at = student_item.updated_at if student_item else None
             item.next_1 = student_item.next_1 if student_item else 1
             item.next_2 = student_item.next_2 if student_item else 1
+            # Log item data for debugging
+            logger.debug(f"Processing item ID: {item.id}, Type: {item.item_type}, Question: {item.question}")
+            logger.debug(f"Answers: answer1={getattr(item, 'answer1', None)}, answer2={getattr(item, 'answer2', None)}, answer3={getattr(item, 'answer3', None)}, answer4={getattr(item, 'answer4', None)}")
             if item.item_type == "mc":
-                # For MC, use answer1, answer2, answer3, answer4 as options
-                options = [item.answer1, item.answer2, item.answer3, item.answer4]
-                shuffle(options)  # Randomize the order
+                options = [getattr(item, 'answer1', ''), getattr(item, 'answer2', ''), getattr(item, 'answer3', ''), getattr(item, 'answer4', '')]
+                options = [opt for opt in options if opt.strip() != '']
+                shuffle(options)
                 item.options = options
-                item.correct_answer = item.answer  # Store correct answer for template
+                item.correct_answer = item.answer
+                item.correct_sequence_json = json.dumps([])
+                logger.debug(f"MC Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}")
             else:
-                # For card/blank, use existing logic
+                # For card
                 wrong_answers = [
-                    i.answer for i in items if i.id != item.id and i.answer != item.answer
+                    i.answer for i in items if i.id != item.id and i.answer and i.answer != item.answer
                 ]
                 if len(wrong_answers) < 3:
                     wrong_answers.extend(
@@ -745,6 +751,8 @@ def activity_view(request, activity_id):
                 shuffle(options)
                 item.options = options
                 item.correct_answer = item.answer
+                item.correct_sequence_json = json.dumps([])
+                logger.debug(f"Card Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}")
         context["items"] = items
         template_name = "course/exercise_activity.html"
     elif activity.activity_type == "video":
@@ -754,7 +762,6 @@ def activity_view(request, activity_id):
     else:
         template_name = "course/html_activity.html"
     return render(request, template_name, context)
-
 
 @require_POST
 @login_required
@@ -884,7 +891,7 @@ def enroll_view(request, course_id):
     except IntegrityError:  # In case unique constraint fails
         messages.warning(request, "You are already enrolled in this course")
 
-    return redirect("available_courses")
+    return redirect("student_courses")
 
 
 @require_POST

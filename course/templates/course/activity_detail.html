@@ -17,7 +17,6 @@
 </div>
 <div class="container mt-4">
     <div class="title-row mb-4 d-flex align-items-center justify-content-between">
-
         <h2 class="mb-0">{{ activity.title }}</h2>
         <div class="nav-buttons mt-2">
             {% if previous_activity %}
@@ -39,8 +38,8 @@
         <!-- Left Column - Activity Content -->
         <div class="col-12 col-md-8 mb-4">
             {% block activity_content %}
-             {% endblock %}   
-        </div>             
+            {% endblock %}  
+        </div>            
         <!-- Right Column - Lesson Navigation -->
         <div class="col-12 col-md-4 mb-4">
             <div class="card">
@@ -50,25 +49,28 @@
                 <div class="card-body p-0">
                     <div class="list-group">
                         {% for a in activities %}
-                        <div class="list-group-item list-group-item-action d-flex flex-column
-                                {% if a == activity %}active-activity{% endif %}">
-                            <div class="d-flex align-items-center w-100 mb-2">
+                        <a href="{% url 'course:activity_detail' a.id %}"
+                           class="list-group-item list-group-item-action d-flex flex-column text-decoration-none
+                                  {% if a == activity %}active-activity{% endif %}">
+                            <div class="d-flex align-items-center w-80 mb-2">
                                 <input type="checkbox"
                                        class="activity-checkbox me-2"
                                        data-activity-id="{{ a.id }}"
+                                       data-activity-title="{{ a.title }}"
                                        {% if a.activity_type == 'exercise' %}
                                            {% if a.student_progress == 100 %}checked{% endif %}
                                            disabled
+                                           aria-disabled="true"
+                                           aria-label="Exercise {{ a.title }} {{ a.student_progress|floatformat:'0'|yesno:'completed,incomplete' }}"
                                        {% else %}
                                            {% if a.student_completed %}checked{% endif %}
-                                       {% endif %}>
-                                <a href="{% url 'course:activity_detail' a.id %}"
-                                   class="flex-grow-1 text-decoration-none">
-                                    <span>{{ a.global_index }}. {{ a.title }}</span>
-                                </a>
+                                           aria-label="Mark {{ a.title }} as {{ a.student_completed|yesno:'completed,incomplete' }}"
+                                       {% endif %}
+                                       style="z-index: 1;">
+                                <span class="flex-grow-1">{{ a.global_index }}. {{ a.title }}</span>
                             </div>
                             {% if a.activity_type == 'exercise' %}
-                            <div class="progress w-100" style="height: 16px;">
+                            <div class="progress w-80 ms-4" style="height: 16px;">
                                 <div class="progress-bar"
                                      role="progressbar"
                                      style="width: {{ a.student_progress|floatformat:'0' }}%;
@@ -84,13 +86,15 @@
                                 </div>
                             </div>
                             {% endif %}
-                        </div>
+                        </a>
                         {% endfor %}
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    <!-- Error Alert -->
+    <div id="error-alert" class="alert alert-danger alert-error" role="alert" style="display: none;"></div>
 </div>
 {% endblock %}
 {% block extra_css %}
@@ -102,9 +106,12 @@
 .activity-checkbox:disabled {
     cursor: not-allowed;
 }
+.activity-checkbox.loading {
+    opacity: 0.5;
+}
 .active-activity {
     background-color: #e7f1ff;
-    border-radius:0px !important;
+    border-radius: 0px !important;
 }
 .nav-buttons {
     display: flex;
@@ -114,35 +121,130 @@
     font-size: 0.9rem;
     padding: 0.25rem 0.75rem;
 }
+.list-group-item-action {
+    padding: 0.5rem 1rem;
+    position: relative;
+}
+.activity-checkbox {
+    cursor: default;
+    pointer-events: auto;
+}
+.list-group-item-action:hover {
+    background-color: #f8f9fa;
+}
+.progress {
+    margin-left: 2rem;
+}
+.alert-error {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    display: none;
+    max-width: 300px;
+}
 </style>
 {% endblock %}
 {% block extra_js %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
 <script>
-$(document).ready(function() {
-    $('.activity-checkbox').change(function() {
-        const activityId = $(this).data('activity-id');
-        const isCompleted = $(this).is(':checked');
-        // Only send AJAX request for non-exercise activities
-        if ($(this).closest('.list-group-item').find('.progress').length === 0) {
-            $.ajax({
-                url: '{% url "course:submit_activity" 0 %}'.replace('0', activityId),
-                type: 'POST',
-                data: {
-                    is_completed: isCompleted,
-                    csrfmiddlewaretoken: '{{ csrf_token }}'
-                },
-                success: function(response) {
-                    console.log('Activity completion status updated');
-                },
-                error: function(xhr) {
-                    console.error('Error updating completion status:', xhr);
-                    // Revert checkbox on error
-                    $(this).prop('checked', !isCompleted);
-                }
-            });
-        }
+// Debug script execution
+console.log('activity_detail.html script loaded');
+
+// Log cookies to debug __Secure-YEC
+console.log('Cookies:', document.cookie);
+
+// Simplified error alert function
+function showErrorAlert(message) {
+    let alertDiv = document.getElementById('error-alert');
+    alertDiv.textContent = message;
+    alertDiv.style.display = 'block';
+    setTimeout(() => alertDiv.style.display = 'none', 3000);
+}
+
+// Log checkboxes to verify detection
+console.log('Found checkboxes:', document.querySelectorAll('.activity-checkbox').length);
+document.querySelectorAll('.activity-checkbox').forEach(checkbox => {
+    console.log('Checkbox:', {
+        id: checkbox.dataset.activityId,
+        title: checkbox.dataset.activityTitle,
+        isExercise: checkbox.closest('.list-group-item').querySelector('.progress') !== null,
+        checked: checkbox.checked
     });
+});
+
+// Activity completion handling
+document.addEventListener('change', function(event) {
+    if (!event.target.matches('.activity-checkbox')) return;
+    const checkbox = event.target;
+    const activityId = checkbox.dataset.activityId;
+    const activityTitle = checkbox.dataset.activityTitle;
+    const isCompleted = checkbox.checked;
+    console.log('Checkbox changed:', { activityId, activityTitle, isCompleted });
+
+    // Handle non-exercise activities only (video, PDF, HTML)
+    if (!checkbox.closest('.list-group-item').querySelector('.progress')) {
+        const url = '{% url "course:submit_activity" 0 %}'.replace('0', activityId);
+        console.log('Sending AJAX to:', url, { activityId, activityTitle, isCompleted });
+
+        // Show loading state
+        checkbox.disabled = true;
+        checkbox.classList.add('loading');
+
+        // AJAX request
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+        const data = `is_completed=${isCompleted}&csrfmiddlewaretoken={{ csrf_token }}`;
+        console.log('AJAX data:', data);
+
+        xhr.onload = function() {
+            checkbox.disabled = false;
+            checkbox.classList.remove('loading');
+            console.log('AJAX response headers:', xhr.getAllResponseHeaders());
+            console.log('AJAX response:', xhr.responseText.substring(0, 100)); // Log first 100 chars
+            if (xhr.status === 200) {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    console.log('AJAX success:', { activityId, activityTitle, response, isCompleted });
+                    if (response.status === 'success') {
+                        // Update UI based on isCompleted
+                        checkbox.setAttribute('aria-label', `Mark ${activityTitle} as ${isCompleted ? 'completed' : 'incomplete'}`);
+                        checkbox.closest('.list-group-item').classList.toggle('text-success', isCompleted);
+                    } else {
+                        console.error('Invalid response status:', response);
+                        showErrorAlert('Failed to update activity: Invalid server response.');
+                    }
+                } catch (e) {
+                    console.error('JSON parse error:', e, 'Response:', xhr.responseText.substring(0, 200));
+                    // Trust database update and keep checkbox state
+                    checkbox.setAttribute('aria-label', `Mark ${activityTitle} as ${isCompleted ? 'completed' : 'incomplete'}`);
+                    checkbox.closest('.list-group-item').classList.toggle('text-success', isCompleted);
+                    // showErrorAlert('Server returned HTML, but update may have succeeded. Please refresh.');
+                    // Optional: Redirect to course.html to refresh UI
+                    // window.location.href = '{% url "course:course" course_id %}';
+                }
+            } else {
+                console.error('AJAX error:', { status: xhr.status, responseText: xhr.responseText.substring(0, 200) });
+                checkbox.checked = !isCompleted;
+                showErrorAlert('Failed to update activity: Server error (status ' + xhr.status + ').');
+            }
+        };
+
+        xhr.onerror = function() {
+            console.error('AJAX network error for activity:', { activityId, activityTitle });
+            checkbox.checked = !isCompleted;
+            checkbox.disabled = false;
+            checkbox.classList.remove('loading');
+            showErrorAlert('Failed to update activity: Network error.');
+        };
+
+        xhr.send(data);
+    } else {
+        console.log('Skipping AJAX for exercise activity:', { activityId, activityTitle });
+        checkbox.checked = checkbox.getAttribute('aria-label').includes('completed');
+    }
 });
 </script>
 {% endblock %}
