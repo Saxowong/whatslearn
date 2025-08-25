@@ -218,7 +218,6 @@ def available_courses_view(request):
 @login_required
 def revision_view(request, course_id):
     user = request.user.profile
-
     # Get the specific course
     course = get_object_or_404(
         Course.objects.filter(
@@ -240,7 +239,6 @@ def revision_view(request, course_id):
         .select_related("teacher__user"),
         id=course_id,
     )
-
     # Get all enrolled courses for navigation, sorted by revision_items_count (descending)
     revision_courses = (
         Course.objects.filter(
@@ -262,7 +260,6 @@ def revision_view(request, course_id):
         .select_related("teacher__user")
         .order_by(Coalesce("revision_items_count", 0).desc(), "title")
     )
-
     # Get items due for revision first
     due_items = (
         StudentItem.objects.filter(
@@ -275,8 +272,13 @@ def revision_view(request, course_id):
         .values(
             "id",
             "item__id",
+            "item__item_type",  # Added for MC support
             "item__question",
             "item__answer",
+            "item__answer1",  # Added for MC support
+            "item__answer2",  # Added for MC support
+            "item__answer3",  # Added for MC support
+            "item__answer4",  # Added for MC support
             "item__image",
             "item__audio",
             "successes",
@@ -288,7 +290,6 @@ def revision_view(request, course_id):
         )
         .order_by("revise_at")
     )
-
     # If less than 10 due items, get additional items with fewest successes
     items = list(due_items)
     if len(items) < 10:
@@ -306,8 +307,13 @@ def revision_view(request, course_id):
             .values(
                 "id",
                 "item__id",
+                "item__item_type",  # Added for MC support
                 "item__question",
                 "item__answer",
+                "item__answer1",  # Added for MC support
+                "item__answer2",  # Added for MC support
+                "item__answer3",  # Added for MC support
+                "item__answer4",  # Added for MC support
                 "item__image",
                 "item__audio",
                 "successes",
@@ -320,22 +326,25 @@ def revision_view(request, course_id):
             .order_by("successes", "id")[:remaining_count]
         )
         items.extend(additional_items)
-
-    # Get all possible answers for generating alternatives
+    # Get all possible answers for generating alternatives for flash cards
     all_answers = (
         Item.objects.filter(activity__lesson__course=course)
         .exclude(answer__isnull=True)
         .values_list("answer", flat=True)
         .distinct()
     )
-
     course.revision_items = []
     for item in items:
         item_data = {
             "id": item["id"],
             "item_id": item["item__id"],
+            "item_type": item["item__item_type"],  # Added for MC support
             "question": item["item__question"],
             "answer": item["item__answer"],
+            "answer1": item["item__answer1"],  # Added for MC support
+            "answer2": item["item__answer2"],  # Added for MC support
+            "answer3": item["item__answer3"],  # Added for MC support
+            "answer4": item["item__answer4"],  # Added for MC support
             "successes": item["successes"],
             "is_master": item["is_master"],
             "next_1": item["next_1"],
@@ -343,37 +352,35 @@ def revision_view(request, course_id):
             "revise_at": (item["revise_at"].isoformat() if item["revise_at"] else None),
             "continue_revision": item["continue_revision"],
         }
-        # Generate three alternative wrong answers
-        wrong_answers = list(set(all_answers) - {item["item__answer"]})
-        wrong_answers = (
-            wrong_answers[:3]
-            if len(wrong_answers) >= 3
-            else wrong_answers
-            + ["Option " + str(i) for i in range(1, 4 - len(wrong_answers) + 1)]
-        )
-        item_data["wrong_answers"] = wrong_answers
-
+        # Generate three alternative wrong answers for flash cards
+        if item["item__item_type"] == "card":
+            wrong_answers = list(set(all_answers) - {item["item__answer"]})
+            wrong_answers = (
+                wrong_answers[:3]
+                if len(wrong_answers) >= 3
+                else wrong_answers
+                + ["Option " + str(i) for i in range(1, 4 - len(wrong_answers) + 1)]
+            )
+            item_data["wrong_answers"] = wrong_answers
+        else:
+            item_data["wrong_answers"] = []  # MC items use answer1-4 directly
         # Handle image and audio files
         if item["item__image"]:
             try:
                 item_data["image"] = Item.objects.get(id=item["item__id"]).image.url
             except (Item.DoesNotExist, ValueError):
                 item_data["image"] = None
-
         if item["item__audio"]:
             try:
                 item_data["audio"] = Item.objects.get(id=item["item__id"]).audio.url
             except (Item.DoesNotExist, ValueError):
                 item_data["audio"] = None
-
         course.revision_items.append(item_data)
-
     context = {
         "courses": revision_courses,
         "first_course": course,
     }
     return render(request, "course/revision.html", context)
-
 
 @login_required
 @require_POST

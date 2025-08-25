@@ -1,5 +1,6 @@
 {% extends "user/base.html" %}
 {% load static %}
+
 {% block content %}
 <audio id="audio-correct" preload="auto">
     <source src="/media/audio/correct.mp3" type="audio/mpeg">
@@ -19,6 +20,7 @@
         </ol>
     </nav>
 </div>
+
 <div class="container mt-4">
     <div class="title-row">
         <h2>Revision</h2>
@@ -26,7 +28,7 @@
     <div class="row">
         <!-- Left Column: Welcome Block (8 columns) -->
         <div class="col-12 col-md-8 mb-4">
-            <div id="welcomeBlock" class="text-center welcome-block p-4 mb-2 rounded">        
+            <div id="welcomeBlock" class="text-center welcome-block p-4 mb-2 rounded">         
                 {% if first_course %}
                     {% if first_course.revision_items_count > 0 %}
                         <h4 id="courseTitle">{{ first_course.title|escape }}</h4>
@@ -55,9 +57,8 @@
                 </form>
                 <div id="questions" class="questions-wrapper position-relative">
                     {% for item in first_course.revision_items %}
-                    <div class="question-card d-none"
+                    <div class="question-card d-none" 
                          data-item-id="{{ item.id }}"
-                         data-item-type="{{ item.item_type }}"
                          data-item-successes="{{ item.successes|default:0 }}"
                          data-item-correctanswer="{{ item.answer|escapejs }}"
                          data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
@@ -65,10 +66,6 @@
                          data-item-next2="{{ item.next_2|default:1 }}"
                          data-item-reviseat="{{ item.revise_at|default:'' }}"
                          data-item-continuerevision="{% if item.continue_revision %}true{% else %}false{% endif %}"
-                         data-item-answer1="{{ item.answer1|escapejs }}"
-                         data-item-answer2="{{ item.answer2|escapejs }}"
-                         data-item-answer3="{{ item.answer3|escapejs }}"
-                         data-item-answer4="{{ item.answer4|escapejs }}"
                          style="min-height: 60vh;">
                         <div class="question-content position-relative">
                             <div class="question-text fs-5 mb-2">
@@ -107,7 +104,7 @@
                     {% endfor %}
                 </div>
                 {% endif %}
-               
+                
                 <!-- Feedback Modal -->
                 <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
                     <div class="modal-dialog modal-dialog-centered">
@@ -129,7 +126,7 @@
                         </div>
                     </div>
                 </div>
-           
+            
                 <!-- Skip Revision Confirmation Modal -->
                 <div class="modal fade" id="skipConfirmationModal" tabindex="-1" aria-labelledby="skipConfirmationModalLabel" aria-hidden="true">
                     <div class="modal-dialog modal-dialog-centered">
@@ -175,7 +172,7 @@
         </div>
     </div>
 </div>
-
+  
 <style>
 .welcome-block {
     border: 1px solid #ddd;
@@ -246,6 +243,7 @@
     min-width: 100px;
 }
 </style>
+
 <script>
 $(document).ready(function() {
     let dueItems = [];
@@ -268,6 +266,7 @@ $(document).ready(function() {
         otherItems = [];
         revisedItems = [];
         correctCount = 0;
+
         const now = new Date();
         $('.question-card').each(function() {
             const $card = $(this);
@@ -275,7 +274,6 @@ $(document).ready(function() {
             const continueRevision = String($card.data('item-continuerevision')) === 'true';
             const item = {
                 id: $card.data('item-id'),
-                item_type: $card.data('item-type'),
                 successes: parseInt($card.data('item-successes') || 0),
                 is_master: $card.data('item-is-master') === 'true',
                 correctAnswer: $card.data('item-correctanswer'),
@@ -283,28 +281,31 @@ $(document).ready(function() {
                 next_2: parseInt($card.data('item-next2') || 1),
                 revise_at: reviseAt || null,
                 continue_revision: continueRevision,
-                element: this,
-                answer1: $card.data('item-answer1'),
-                answer2: $card.data('item-answer2'),
-                answer3: $card.data('item-answer3'),
-                answer4: $card.data('item-answer4')
+                element: this
             };
+
             if (reviseAt && new Date(reviseAt) <= now && continueRevision) {
                 dueItems.push(item);
             } else if (continueRevision) {
                 otherItems.push(item);
             }
         });
+
+        // Sort due items by revise_at (earliest first)
         dueItems.sort((a, b) => {
             if (!a.revise_at) return 1;
             if (!b.revise_at) return -1;
             return new Date(a.revise_at) - new Date(b.revise_at);
         });
+
+        // If no due items, shuffle other items to randomize order
         if (dueItems.length === 0) {
             otherItems = shuffleArray(otherItems);
         } else {
+            // Otherwise, sort other items by successes (fewest first)
             otherItems.sort((a, b) => a.successes - b.successes || a.id - b.id);
         }
+
         updateProgressIcons();
         dueItems.concat(otherItems).forEach(item => reshuffleOptions(item));
     }
@@ -314,24 +315,32 @@ $(document).ready(function() {
             saveProgress(true);
             return;
         }
+
+        // First try to get a due item
         if (dueItems.length > 0) {
             currentItem = dueItems.shift();
         } else if (otherItems.length > 0) {
+            // If no due items, get from other items
             currentItem = otherItems.shift();
+            // Push back to end of otherItems to cycle through them
             otherItems.push(currentItem);
         } else {
+            // If no items left, save progress
             saveProgress(true);
             return;
         }
+
         if (currentItem) {
             showItem(currentItem);
             $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
         } else {
+            console.warn('No current item to show');
             saveProgress(true);
         }
     }
 
     function showItem(item) {
+        console.log('Showing item:', item.id);
         $('.question-card').addClass('d-none');
         $(item.element).removeClass('d-none');
         const audioElement = $(item.element).find('audio')[0];
@@ -342,38 +351,29 @@ $(document).ready(function() {
     }
 
     function reshuffleOptions(item) {
-        let options;
-        if (item.item_type === 'mc') {
-            options = [
-                item.correctAnswer,
-                item.answer1 || 'Option A',
-                item.answer2 || 'Option B',
-                item.answer3 || 'Option C',
-                item.answer4 || 'Option D'
-            ].filter(opt => opt); // Remove any null/undefined options
-        } else {
-            const allItems = $('.question-card').map(function() {
-                return { answer: $(this).data('item-correctanswer') };
-            }).get();
-            const correctAnswer = item.correctAnswer;
-            let wrongAnswers = allItems
-                .map(i => i.answer)
-                .filter(answer => answer !== correctAnswer && answer);
-            if (wrongAnswers.length > 3) {
-                wrongAnswers = shuffleArray(wrongAnswers).slice(0, 3);
-            } else if (wrongAnswers.length < 3) {
-                const placeholders = ["Option A", "Option B", "Option C"];
-                wrongAnswers = wrongAnswers.concat(
-                    placeholders.slice(0, 3 - wrongAnswers.length)
-                );
-            }
-            options = [correctAnswer, ...wrongAnswers];
+        const allItems = $('.question-card').map(function() {
+            return {
+                answer: $(this).data('item-correctanswer')
+            };
+        }).get();
+        const correctAnswer = item.correctAnswer;
+        let wrongAnswers = allItems
+            .map(i => i.answer)
+            .filter(answer => answer !== correctAnswer && answer);
+        if (wrongAnswers.length > 3) {
+            wrongAnswers = shuffleArray(wrongAnswers).slice(0, 3);
+        } else if (wrongAnswers.length < 3) {
+            const placeholders = ["Option A", "Option B", "Option C"];
+            wrongAnswers = wrongAnswers.concat(
+                placeholders.slice(0, 3 - wrongAnswers.length)
+            );
         }
+        const options = [correctAnswer, ...wrongAnswers];
         shuffleArray(options);
         const $buttons = $(item.element).find('.answer-btn');
         $buttons.each(function(index) {
-            $(this).text(options[index] || '');
-            $(this).data('correct', options[index] === item.correctAnswer);
+            $(this).text(options[index]);
+            $(this).data('correct', options[index] === correctAnswer);
             $(this).removeClass('selected-answer correct-answer incorrect-answer');
         });
     }
@@ -394,9 +394,11 @@ $(document).ready(function() {
         modal.find('#feedbackResult').text(isCorrect ? 'Correct!' : 'Incorrect');
         modal.find('#correctAnswerText').html(isCorrect ? '' : `Correct answer: <strong>${correctAnswer}</strong>`);
         updateProgressIcons();
+
         if (revisedItems.length >= MAX_ITEMS_PER_ROUND) {
             modal.find('#continueButton').hide();
             modal.find('#stopButton').text('Finish').show().off('click').on('click', () => {
+                console.log('Finish button clicked');
                 saveProgress(true);
                 modal.modal('hide');
             });
@@ -406,6 +408,7 @@ $(document).ready(function() {
                 processNextItem();
             });
             modal.find('#stopButton').text('Stop').show().off('click').on('click', () => {
+                console.log('Stop button clicked');
                 saveProgress();
                 modal.modal('hide');
             });
@@ -416,6 +419,7 @@ $(document).ready(function() {
                 showItem(currentItem);
             });
             modal.find('#stopButton').text('Stop').show().off('click').on('click', () => {
+                console.log('Stop button clicked');
                 saveProgress();
                 modal.modal('hide');
             });
@@ -432,8 +436,10 @@ $(document).ready(function() {
             revise_at: item.revise_at,
             continue_revision: item.continue_revision
         }));
+
         $('#responses').val(JSON.stringify(responses));
         $('#is_completed').val(isCompleted);
+
         $.ajax({
             url: $('#revisionForm').attr('action'),
             method: 'POST',
@@ -444,6 +450,7 @@ $(document).ready(function() {
             },
             dataType: 'json',
             success: function(response) {
+                console.log('Success response:', response);
                 if (response.status === 'success') {
                     $('#itemCount').html(`There are <strong>${response.stats.remaining_items}</strong> items due for revision.`);
                     $('#welcomeBlock').prepend(
@@ -455,10 +462,13 @@ $(document).ready(function() {
                         window.location.href = response.redirect_url;
                     }
                 } else {
+                    console.error('Server error:', response);
                     alert('Error saving progress: ' + (response.message || 'Unknown error'));
                 }
             },
             error: function(xhr, status, error) {
+                console.error('AJAX Error:', { xhr: xhr, status: status, error: error });
+                console.log('Response Text:', xhr.responseText);
                 alert('Error saving progress: ' + (xhr.responseJSON?.message || 'Unknown error'));
             }
         });
@@ -474,10 +484,12 @@ $(document).ready(function() {
             correctCount++;
             currentItem.successes += 1;
             
+            // Only update next_1, next_2 and revise_at if current time is greater than revise_at
             const now = new Date();
             const reviseAt = currentItem.revise_at ? new Date(currentItem.revise_at) : null;
             
             if (!reviseAt || now > reviseAt) {
+                // Update the intervals only if it's time to revise
                 temp = currentItem.next_2;
                 currentItem.next_2 = currentItem.next_1 + currentItem.next_2;
                 currentItem.next_1 = temp;
@@ -490,6 +502,7 @@ $(document).ready(function() {
             revisedItems.push(currentItem);
             showFeedback(isCorrect, currentItem.correctAnswer);
         } else {
+            // Push incorrect item back to its respective list
             if (currentItem.revise_at && new Date(currentItem.revise_at) <= new Date()) {
                 dueItems.unshift(currentItem);
             } else {
@@ -500,6 +513,7 @@ $(document).ready(function() {
     }
 
     $('#startButton').click(function() {
+        console.log('Start button clicked');
         initializeLists();
         $('#welcomeBlock').addClass('d-none');
         $('#revisionContainer').removeClass('d-none');
@@ -507,6 +521,7 @@ $(document).ready(function() {
     });
 
     $('#startOverallButton').click(function() {
+        console.log('Start overall button clicked');
         initializeLists();
         $('#welcomeBlock').addClass('d-none');
         $('#revisionContainer').removeClass('d-none');
@@ -528,6 +543,7 @@ $(document).ready(function() {
 
     $(document).on('click', '.skip-revision', function(e) {
         e.preventDefault();
+        console.log('Skip-revision clicked');
         if (currentItem) {
             $('#skipConfirmationModal').modal('show');
         }
@@ -537,7 +553,7 @@ $(document).ready(function() {
         if (currentItem) {
             currentItem.continue_revision = false;
             revisedItems.push(currentItem);
-            $(currentItem.element).attr('data-item-continuerevision', 'false');  
+            $(currentItem.element).attr('data-item-continuerevision', 'false');   
         }
         $('#skipConfirmationModal').modal('hide');
         processNextItem();
@@ -545,9 +561,11 @@ $(document).ready(function() {
 
     $('#skipCancelButton').click(function() {
         $('#skipConfirmationModal').modal('hide');
+        console.log('Skip canceled');
     });
 
     $('#stopButton').click(function() {
+        console.log('Stop button clicked');
         saveProgress();
     });
 });

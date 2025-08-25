@@ -1,6 +1,5 @@
 {% extends "user/base.html" %}
 {% load static %}
-
 {% block content %}
 <div class="container pt-3">
     <nav aria-label="breadcrumb">
@@ -45,7 +44,6 @@
             </button>
         </div>
     </div>
-
     <div class="card">
         <div class="card-body">
             <form id="reorderForm" method="POST" action="{% url 'teacher:manage_items' activity.id %}">
@@ -55,6 +53,7 @@
                     <thead>
                         <tr>
                             <th>Order</th>
+                            <th>Item Type</th>
                             <th>Item Title</th>
                             <th>Question</th>
                             <th>Answer</th>
@@ -69,6 +68,7 @@
                                 <span class="order-value">{{ item.order|default:"0" }}</span>
                                 <input type="hidden" name="order_{{ item.id }}" class="order-input" value="{{ item.order|default:'0' }}">
                             </td>
+                            <td>{{ item.get_item_type_display|default:"N/A" }}</td>
                             <td>{{ item.title|default:"Untitled" }}</td>
                             <td>{{ item.question|truncatechars:50|default:"N/A" }}</td>
                             <td>{{ item.answer|default:"N/A" }}</td>
@@ -77,7 +77,7 @@
                                 <a href="{% url 'teacher:edit_item' activity.id item.id %}" class="btn btn-sm btn-primary" aria-label="Edit item">
                                     <i class="bi bi-pencil"></i>
                                 </a>
-                                <button type="button" class="btn btn-sm btn-warning delete-item-btn" 
+                                <button type="button" class="btn btn-sm btn-warning delete-item-btn"
                                         data-item-id="{{ item.id }}" data-item-title="{{ item.title|default:'Untitled'|escapejs }}"
                                         data-bs-toggle="modal" data-bs-target="#deleteItemModal" aria-label="Delete item">
                                     <i class="bi bi-trash"></i>
@@ -86,6 +86,7 @@
                         </tr>
                         {% empty %}
                         <tr>
+                            <td></td>
                             <td></td>
                             <td>No items found</td>
                             <td></td>
@@ -99,7 +100,6 @@
             </form>
         </div>
     </div>
-
     <!-- Delete Item Modal -->
     <div class="modal fade" id="deleteItemModal" tabindex="-1" aria-labelledby="deleteItemModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -121,7 +121,6 @@
             </div>
         </div>
     </div>
-
     <!-- Import Items Modal -->
     <div class="modal fade" id="importItemsModal" tabindex="-1" aria-labelledby="importItemsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -150,7 +149,6 @@
     </div>
 </div>
 {% endblock %}
-
 {% block extra_css %}
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
@@ -179,14 +177,12 @@
     }
 </style>
 {% endblock %}
-
 {% block extra_js %}
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
-
 <script>
 $(document).ready(function() {
     try {
@@ -196,20 +192,20 @@ $(document).ready(function() {
                 {
                     extend: 'excelHtml5',
                     className: 'btn btn-sm btn-outline-success',
-                    exportOptions: { columns: [0, 1, 2, 3, 4] }
+                    exportOptions: { columns: [0, 1, 2, 3, 4, 5] }
                 },
                 {
                     extend: 'pdfHtml5',
                     className: 'btn btn-sm btn-outline-danger',
                     title: 'Items for {{ activity.title|default:"Activity"|escapejs }} - {{ request.user.get_full_name|default:request.user.username|escapejs }}',
-                    exportOptions: { columns: [0, 1, 2, 3, 4] }
+                    exportOptions: { columns: [0, 1, 2, 3, 4, 5] }
                 }
             ],
             responsive: true,
-            order: [[0, 'asc']], // Sort by Order column (now index 0)
+            order: [[0, 'asc']], // Sort by Order column
             columnDefs: [
                 {
-                    targets: [4], // Created At column (now index 4)
+                    targets: 5, // Created At column
                     render: function(data, type) {
                         if (type === 'display') {
                             if (!data || data === 'N/A') return 'N/A';
@@ -232,7 +228,7 @@ $(document).ready(function() {
                     }
                 },
                 {
-                    targets: 0, // Order column (now index 0)
+                    targets: 0, // Order column
                     render: function(data, type, row) {
                         if (type === 'display') {
                             return `<span class="order-value">${data}</span>`;
@@ -241,7 +237,7 @@ $(document).ready(function() {
                     }
                 },
                 {
-                    targets: -1, // Actions column (still last)
+                    targets: -1, // Actions column
                     orderable: false,
                     searchable: false
                 }
@@ -256,7 +252,6 @@ $(document).ready(function() {
                 console.log('DataTable initialized');
             }
         });
-
         // Inline editing for order column
         $(document).on('click', '.editable-order', function() {
             try {
@@ -267,7 +262,6 @@ $(document).ready(function() {
                 const $input = $('<input type="number" min="0" class="form-control form-control-sm">').val(currentValue);
                 $cell.find('.order-value').replaceWith($input);
                 $input.focus();
-
                 $input.on('blur', function() {
                     const inputVal = $input.val();
                     const newValue = isNaN(parseInt(inputVal)) ? currentValue : parseInt(inputVal);
@@ -276,7 +270,6 @@ $(document).ready(function() {
                     $cell.html(`<span class="order-value">${newValue}</span><input type="hidden" name="order_${itemId}" class="order-input" value="${newValue}">`);
                     console.log(`Order updated for item ${itemId}: ${newValue}`);
                 });
-
                 $input.on('keypress', function(e) {
                     if (e.which === 13) {
                         $input.blur();
@@ -286,7 +279,6 @@ $(document).ready(function() {
                 console.error('Inline editing error:', e);
             }
         });
-
         // Delete item handler
         $(document).on('click', '.delete-item-btn', function() {
             try {
