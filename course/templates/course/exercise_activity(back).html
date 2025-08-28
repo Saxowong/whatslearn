@@ -49,10 +49,8 @@
                          data-item-successes="{{ item.successes|default:0 }}"
                          data-item-correctAnswer="{{ item.correct_answer|default:'' }}"
                          data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
-                         data-item-audioplay="{{ item.audio_play|default:'start' }}"
                          style="min-height: 60vh;">
                         <div class="question-content mb-2 position-relative">
-                            <center><h4 class="feedback-result d-none mb-3"></h4></center>
                             <div class="question-text fs-5 mb-2">
                                 {{ item.question|safe }}
                             </div>
@@ -61,21 +59,12 @@
                             {% endif %}
                             {% if item.audio %}
                             <div class="position-absolute top-0 end-0 mt-2">
-                                <i class="bi bi-volume-up fs-2 text-primary question-audio-icon" style="cursor: pointer;"></i>
+                                <i class="bi bi-volume-up fs-2 text-primary" style="cursor: pointer;"></i>
                             </div>
                             <audio class="d-none" preload="auto">
                                 <source src="{{ item.audio.url }}" type="audio/mpeg">
                             </audio>
                             {% endif %}
-                            <div class="feedback-answer d-none mt-4 mb-3">
-                                {% if item.audio %}
-                                <div class="position-absolute top-0 end-0">
-                                    <i class="bi bi-volume-up fs-2 text-primary feedback-audio-icon d-none" style="cursor: pointer;"></i>
-                                </div>
-                                {% endif %}
-                                <p>The answer(s) are:</p>
-                                <p class="correct-answer-text fs-5 text-primary"></p>
-                            </div>
                         </div>
                         <div class="answer-buttons row g-2 mt-2">
                             <div class="col-12 text-end mb-1">
@@ -90,10 +79,6 @@
                                 </button>
                             </div>
                             {% endfor %}
-                        </div>
-                        <div class="feedback-buttons d-none mt-3 d-flex justify-content-center gap-2">
-                            <button type="button" class="btn btn-primary continue-btn">Continue</button>
-                            <button type="button" class="btn btn-secondary stop-btn">Stop</button>
                         </div>
                     </div>
                     {% endfor %}
@@ -178,12 +163,6 @@
     background-color: #f8d7da !important;
     border-color: #dc3545 !important;
 }
-.feedback-result.correct {
-    color: #28a745;
-}
-.feedback-result.incorrect {
-    color: #dc3545;
-}
 .progress-container {
     max-width: 500px;
     margin: 0 auto;
@@ -208,6 +187,7 @@
     color: #dc3545 !important; /* Red for incorrect answers */
 }
 </style>
+
 {% block extra_js %}
 {{ block.super }}
 <script>
@@ -263,7 +243,6 @@ $(document).ready(function() {
                 is_master: $(this).data('item-is-master') === true,
                 correctAnswer: $(this).data('item-correctanswer') || '',
                 original_question: $(this).find('.question-text').html(),
-                audio_play: $(this).data('item-audioplay') || 'start',
                 element: this
             };
         }).get();
@@ -357,8 +336,6 @@ $(document).ready(function() {
             showRoundCompletion();
         }
         $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
-        $('.feedback-result, .feedback-answer, .feedback-buttons, .feedback-audio-icon').addClass('d-none');
-        $('.question-text, .answer-buttons, .question-audio-icon, img').removeClass('d-none');
     }
     function showItem(item) {
         $('.question-card').addClass('d-none');
@@ -366,7 +343,7 @@ $(document).ready(function() {
         $(item.element).find('.question-text').html(item.original_question);
         console.log('Item ID:', item.id, 'Question:', item.original_question, 'Correct Answer:', item.correctAnswer, 'Options:', $(item.element).find('.answer-btn').map(function() { return $(this).data('option'); }).get());
         const audioElement = $(item.element).find('audio')[0];
-        if (audioElement && (item.audio_play === 'start' || item.audio_play === 'both')) {
+        if (audioElement) {
             audioElement.currentTime = 0;
             audioElement.play().catch(function(error) {
                 console.error('Audio playback failed:', error);
@@ -425,57 +402,38 @@ $(document).ready(function() {
         });
     }
     function showFeedback(isCorrect, correctAnswer, onCloseCallback) {
-        const $card = $(currentItem.element);
-        const $feedbackResult = $card.find('.feedback-result');
-        const $feedbackAnswer = $card.find('.feedback-answer');
-        const $correctAnswerText = $card.find('.correct-answer-text');
-        const $feedbackButtons = $card.find('.feedback-buttons');
-        const $answerButtons = $card.find('.answer-buttons');
-        const $questionElements = $card.find('.answer-buttons, .question-audio-icon, img');
-        const $feedbackAudioIcon = $card.find('.feedback-audio-icon');
-        const audioElement = $card.find('audio')[0];
-        const feedbackAudio = isCorrect ? document.getElementById('audio-correct') : document.getElementById('audio-wrong');
-        // Show feedback elements immediately
-        $questionElements.addClass('d-none');
-        $feedbackResult.text(isCorrect ? 'Correct!' : 'Incorrect!').addClass(isCorrect ? 'correct' : 'incorrect').removeClass('d-none');
-        $correctAnswerText.html(isCorrect ? correctAnswer : `<strong>${correctAnswer}</strong>`);
-        $feedbackAnswer.removeClass('d-none');
-        $feedbackButtons.removeClass('d-none');
-        $card.find('.question-text').removeClass('d-none');
-        if (audioElement) {
-            $feedbackAudioIcon.removeClass('d-none');
-        }
+        const modal = $('#feedbackModal');
+        modal.find('.modal-title').text(isCorrect ? 'Correct!' : 'Incorrect');
+        modal.find('#correctAnswerText').html(
+            isCorrect ? '' : `The correct answer was: <strong>${correctAnswer}</strong>`
+        );
+        updateProgressIcons();
         if (isCorrect) {
             triggerConfetti();
         }
-        // Play feedback audio, then item audio if applicable
-        feedbackAudio.currentTime = 0;
-        feedbackAudio.play();
-        feedbackAudio.onended = () => {
-            if (audioElement && (currentItem.audio_play === 'end' || currentItem.audio_play === 'both')) {
-                audioElement.currentTime = 0;
-                audioElement.play().catch(function(error) {
-                    console.error('Audio playback failed:', error);
-                });
-            }
-        };
-        // Clear previous event handlers to prevent duplicates
-        $card.find('.continue-btn').off('click');
-        $card.find('.stop-btn').off('click');
         if (correctCount >= MAX_ITEMS_PER_ROUND) {
-            $card.find('.continue-btn').hide();
-            $card.find('.stop-btn').text('View Results').show().on('click', () => {
-                saveProgress();
-                showRoundCompletion();
-            });
+            modal.find('#stopButton')
+                .text('View Results')
+                .show()
+                .off('click')
+                .click(function() {
+                    saveProgress();
+                    modal.modal('hide');
+                    showRoundCompletion();
+                });
+            modal.find('#continueButton').hide();
         } else {
-            $card.find('.continue-btn').text(isCorrect ? 'Continue' : 'Try Again').show().on('click', () => {
-                if (onCloseCallback) onCloseCallback();
-            });
-            $card.find('.stop-btn').text('Stop').show().on('click', () => {
-                saveProgress();
-            });
+            modal.find('#continueButton')
+                .text(isCorrect ? 'Continue' : 'Try Again')
+                .show()
+                .off('click')
+                .click(function() {
+                    modal.modal('hide');
+                    if (onCloseCallback) onCloseCallback();
+                });
+            modal.find('#stopButton').show();
         }
+        modal.modal('show');
     }
     function updateProgressIcons() {
         const progressIcons = $('.progress-icons');
@@ -525,24 +483,6 @@ $(document).ready(function() {
         const isCorrect = $(this).data('correct') === true;
         handleAnswer(isCorrect, $(this));
     });
-    $(document).on('click', '.question-audio-icon', function() {
-        const audioElement = $(this).closest('.question-content').find('audio')[0];
-        if (audioElement) {
-            audioElement.currentTime = 0;
-            audioElement.play().catch(function(error) {
-                console.error('Audio playback failed:', error);
-            });
-        }
-    });
-    $(document).on('click', '.feedback-audio-icon', function() {
-        const audioElement = $(this).closest('.question-content').find('audio')[0];
-        if (audioElement) {
-            audioElement.currentTime = 0;
-            audioElement.play().catch(function(error) {
-                console.error('Audio playback failed:', error);
-            });
-        }
-    });
     $('.not-sure-link').click(function(e) {
         e.preventDefault();
         console.log('Not Sure? clicked for item:', currentItem ? currentItem.id : 'none');
@@ -556,7 +496,17 @@ $(document).ready(function() {
             });
         }
     });
+    $('.bi-volume-up').click(function() {
+        const audioElement = $(this).closest('.question-content').find('audio')[0];
+        if (audioElement) {
+            audioElement.currentTime = 0;
+            audioElement.play().catch(function(error) {
+                console.error('Audio playback failed:', error);
+            });
+        }
+    });
 });
 </script>
 {% endblock %}
+
 {% endblock %}

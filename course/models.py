@@ -126,6 +126,12 @@ class Item(models.Model):
     ITEM_TYPES = [
         ("card", "Flash Card"),
         ("mc", "Multiple Choice"),
+        ("blank", "Fill in the Blank"),
+    ]
+    PLAY_AUDIO = [
+        ("start", "Play at Start"),
+        ("end", "Play at End"),
+        ("both", "Play at Both"),
     ]
     item_type = models.CharField(max_length=10, choices=ITEM_TYPES, default="card")
     title = models.CharField(max_length=100)  # Title of the activity item
@@ -138,6 +144,7 @@ class Item(models.Model):
     )  # To keep track of the order of items
     image = models.ImageField(upload_to=item_media_path, blank=True, null=True)
     audio = models.FileField(upload_to=item_media_path, blank=True, null=True, validators=[FileExtensionValidator(allowed_extensions=['mp3', 'wav', 'ogg', 'm4a'])])
+    audio_play = models.CharField(max_length=6, choices=PLAY_AUDIO, default="start", null=True, blank=True)
     answer = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
     answer1 = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
     answer2 = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question

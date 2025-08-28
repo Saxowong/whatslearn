@@ -69,24 +69,35 @@
                          data-item-answer2="{{ item.answer2|escapejs }}"
                          data-item-answer3="{{ item.answer3|escapejs }}"
                          data-item-answer4="{{ item.answer4|escapejs }}"
+                         data-item-audioplay="{{ item.audio_play|default:'start' }}"
                          style="min-height: 60vh;">
-                        <div class="question-content position-relative">
+                        <div class="question-content position-relative" style="flex-grow: 1;">
+                            <center><h2 class="feedback-result d-none mb-3"></h2></center>
                             <div class="question-text fs-5 mb-2">
                                 {{ item.question|safe }}
                             </div>
                             {% if item.image %}
-                            <img src="{{ item.image }}" class="img-fluid" alt="Question image" style="max-height: 200px; object-fit: cover;">
+                            <img src="{{ item.image }}" class="img-fluid mb-2" alt="Question image" style="max-height: 200px; object-fit: cover;">
                             {% endif %}
                             {% if item.audio %}
                             <div class="position-absolute top-0 end-0">
-                                <i class="bi bi-volume-up fs-2 text-primary" style="cursor: pointer;"></i>
+                                <i class="bi bi-volume-up fs-2 text-primary question-audio-icon" style="cursor: pointer;"></i>
                             </div>
                             <audio class="d-none" preload="auto">
                                 <source src="{{ item.audio }}" type="audio/mpeg">
                             </audio>
                             {% endif %}
+                            <div class="feedback-answer d-none mt-4 mb-3">
+                                {% if item.audio %}
+                                <div class="position-absolute top-0 end-0">
+                                    <i class="bi bi-volume-up fs-2 text-primary feedback-audio-icon d-none" style="cursor: pointer;"></i>
+                                </div>
+                                {% endif %}
+                                <p>The answer(s) are:</p>
+                                <p class="correct-answer-text fs-5 text-primary"></p>
+                            </div>
                         </div>
-                        <div class="answer-buttons row g-2 mt-0">
+                        <div class="answer-buttons row g-2 mt-0" style="margin-top: auto;">
                             <div class="col-12 text-end mb-1">
                                 <a href="#" class="skip-revision">Skip future revision</a>
                             </div>
@@ -103,33 +114,15 @@
                                 <button type="button" class="btn btn-outline-primary w-100 answer-btn"></button>
                             </div>
                         </div>
+                        <div class="feedback-buttons d-none mt-3 d-flex justify-content-center gap-2" style="margin-top: auto;">
+                            <button type="button" class="btn btn-primary continue-btn">Continue</button>
+                            <button type="button" class="btn btn-secondary stop-btn">Stop</button>
+                        </div>
+                        <div class="fireworks d-none"></div>
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
-               
-                <!-- Feedback Modal -->
-                <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-body text-center">
-                                <h4 class="modal-title mb-3" id="feedbackResult"></h4>
-                                <p id="correctAnswerText"></p>
-                                <div id="progressIcons" class="mb-3">
-                                    <div class="d-flex justify-content-center align-items-center gap-1">
-                                        <div class="progress-icons"></div>
-                                        <span class="ms-2 correct-count">0/10</span>
-                                    </div>
-                                </div>
-                                <div class="d-flex justify-content-center gap-2">
-                                    <button type="button" class="btn btn-primary" id="continueButton">Continue</button>
-                                    <button type="button" class="btn btn-secondary" id="stopButton">Stop</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-           
                 <!-- Skip Revision Confirmation Modal -->
                 <div class="modal fade" id="skipConfirmationModal" tabindex="-1" aria-labelledby="skipConfirmationModalLabel" aria-hidden="true">
                     <div class="modal-dialog modal-dialog-centered">
@@ -175,12 +168,20 @@
         </div>
     </div>
 </div>
-
 <style>
 .welcome-block {
     border: 1px solid #ddd;
     border-radius: 8px;
     min-height: 50vh;
+}
+.welcome-block.d-none {
+    display: none;
+}
+.flashcard-container.d-none {
+    display: none;
+}
+.questions-wrapper, .flashcard-container {
+    position: relative;
 }
 .question-card {
     min-height: 300px;
@@ -190,13 +191,23 @@
     padding: 20px;
     border: 1px solid #ddd;
     border-radius: 8px;
+    position: relative;
+}
+.question-content {
+    flex-grow: 1;
 }
 .question-text {
     margin-right: 40px;
 }
+.answer-buttons {
+    margin-top: auto;
+}
 .answer-buttons button {
     white-space: normal;
     min-height: 60px;
+}
+.feedback-buttons {
+    margin-top: auto;
 }
 .correct-answer {
     background-color: #d4edda !important;
@@ -239,11 +250,38 @@
 .skip-revision:hover {
     text-decoration: underline;
 }
-#skipConfirmationModal .modal-footer {
-    justify-content: center;
+.feedback-result.correct {
+    color: #28a745;
 }
-#skipConfirmationModal .btn {
-    min-width: 100px;
+.feedback-result.incorrect {
+    color: #dc3545;
+}
+.fireworks {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 1000;
+}
+.firework-particle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #ffd700;
+    border-radius: 50%;
+    animation: firework 1.5s ease-out forwards;
+}
+@keyframes firework {
+    0% {
+        transform: translate(0, 0);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--x), var(--y));
+        opacity: 0;
+    }
 }
 </style>
 <script>
@@ -287,7 +325,8 @@ $(document).ready(function() {
                 answer1: $card.data('item-answer1'),
                 answer2: $card.data('item-answer2'),
                 answer3: $card.data('item-answer3'),
-                answer4: $card.data('item-answer4')
+                answer4: $card.data('item-answer4'),
+                audio_play: $card.data('item-audioplay')
             };
             if (reviseAt && new Date(reviseAt) <= now && continueRevision) {
                 dueItems.push(item);
@@ -326,6 +365,10 @@ $(document).ready(function() {
         if (currentItem) {
             showItem(currentItem);
             $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
+            const $card = $(currentItem.element);
+            $card.find('.feedback-result, .feedback-answer, .feedback-buttons, .feedback-audio-icon').addClass('d-none');
+            $card.find('.question-text, .answer-buttons, .question-audio-icon, img').removeClass('d-none');
+            $card.removeClass('d-none');
         } else {
             saveProgress(true);
         }
@@ -335,9 +378,9 @@ $(document).ready(function() {
         $('.question-card').addClass('d-none');
         $(item.element).removeClass('d-none');
         const audioElement = $(item.element).find('audio')[0];
-        if (audioElement) {
+        if (audioElement && (item.audio_play === 'start' || item.audio_play === 'both')) {
             audioElement.currentTime = 0;
-            audioElement.play().catch(error => console.error('Audio playback failed:', error));
+            audioElement.play();
         }
     }
 
@@ -350,7 +393,7 @@ $(document).ready(function() {
                 item.answer2 || 'Option B',
                 item.answer3 || 'Option C',
                 item.answer4 || 'Option D'
-            ].filter(opt => opt); // Remove any null/undefined options
+            ].filter(opt => opt);
         } else {
             const allItems = $('.question-card').map(function() {
                 return { answer: $(this).data('item-correctanswer') };
@@ -389,38 +432,96 @@ $(document).ready(function() {
         $('.correct-count').text(`${correctCount}/${MAX_ITEMS_PER_ROUND}`);
     }
 
+    function showFireworks($card) {
+        const $fireworks = $card.find('.fireworks').empty().removeClass('d-none');
+        const count = 50;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        for (let i = 0; i < count; i++) {
+            const startX = Math.random() * vw;
+            const startY = Math.random() * vh;
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 100 + Math.random() * 300;
+            const $particle = $('<div class="firework-particle"></div>').css({
+                left: `${startX}px`,
+                top: `${startY}px`,
+                '--x': `${Math.cos(angle) * distance}px`,
+                '--y': `${Math.sin(angle) * distance}px`,
+                background: ['#ffd700', '#ff4500', '#00ff00', '#00b7eb'][Math.floor(Math.random() * 4)]
+            });
+            $fireworks.append($particle);
+        }
+        setTimeout(() => $fireworks.addClass('d-none'), 1500);
+    }
+
     function showFeedback(isCorrect, correctAnswer) {
-        const modal = $('#feedbackModal');
-        modal.find('#feedbackResult').text(isCorrect ? 'Correct!' : 'Incorrect');
-        modal.find('#correctAnswerText').html(isCorrect ? '' : `Correct answer: <strong>${correctAnswer}</strong>`);
-        updateProgressIcons();
+        const $card = $(currentItem.element);
+        const $feedbackResult = $card.find('.feedback-result');
+        const $feedbackAnswer = $card.find('.feedback-answer');
+        const $correctAnswerText = $card.find('.correct-answer-text');
+        const $feedbackButtons = $card.find('.feedback-buttons');
+        const $answerButtons = $card.find('.answer-buttons');
+        const $questionElements = $card.find('.answer-buttons, .question-audio-icon, img');
+        const $feedbackAudioIcon = $card.find('.feedback-audio-icon');
+        const audioElement = $card.find('audio')[0];
+        const feedbackAudio = isCorrect ? document.getElementById('audio-correct') : document.getElementById('audio-wrong');
+
+        // Show feedback elements immediately
+        $questionElements.addClass('d-none');
+        $feedbackResult.text(isCorrect ? 'Correct!' : 'Incorrect!').addClass(isCorrect ? 'correct' : 'incorrect').removeClass('d-none');
+        $correctAnswerText.html(isCorrect ? correctAnswer : `<strong>${correctAnswer}</strong>`);
+        $feedbackAnswer.removeClass('d-none');
+        $feedbackButtons.removeClass('d-none');
+        $card.find('.question-text').removeClass('d-none');
+        if (audioElement) {
+            $feedbackAudioIcon.removeClass('d-none');
+        }
+        if (isCorrect) {
+            showFireworks($card);
+        }
+
+        // Play feedback audio, then item audio if applicable
+        feedbackAudio.currentTime = 0;
+        feedbackAudio.play();
+        feedbackAudio.onended = () => {
+            if (audioElement && (currentItem.audio_play === 'end' || currentItem.audio_play === 'both')) {
+                audioElement.currentTime = 0;
+                audioElement.play();
+            }
+        };
+
+        // Clear previous event handlers to prevent duplicates
+        $card.find('.continue-btn').off('click');
+        $card.find('.stop-btn').off('click');
+
         if (revisedItems.length >= MAX_ITEMS_PER_ROUND) {
-            modal.find('#continueButton').hide();
-            modal.find('#stopButton').text('Finish').show().off('click').on('click', () => {
+            $card.find('.continue-btn').hide();
+            $card.find('.stop-btn').text('Finish').show().on('click', () => {
                 saveProgress(true);
-                modal.modal('hide');
             });
         } else if (isCorrect) {
-            modal.find('#continueButton').text('Continue').show().off('click').on('click', () => {
-                modal.modal('hide');
+            $card.find('.continue-btn').text('Continue').show().on('click', () => {
                 processNextItem();
             });
-            modal.find('#stopButton').text('Stop').show().off('click').on('click', () => {
+            $card.find('.stop-btn').text('Stop').show().on('click', () => {
                 saveProgress();
-                modal.modal('hide');
             });
         } else {
-            modal.find('#continueButton').text('Try Again').show().off('click').on('click', () => {
-                modal.modal('hide');
+            $card.find('.continue-btn').text('Try Again').show().on('click', () => {
                 reshuffleOptions(currentItem);
-                showItem(currentItem);
+                $card.find('.feedback-result, .feedback-answer, .feedback-buttons, .feedback-audio-icon').addClass('d-none');
+                $card.find('.question-text, .answer-buttons, .question-audio-icon, img').removeClass('d-none');
+                // Play audio on retry if audio_play is 'start' or 'both'
+                const audioElement = $card.find('audio')[0];
+                if (audioElement && (currentItem.audio_play === 'start' || currentItem.audio_play === 'both')) {
+                    audioElement.currentTime = 0;
+                    audioElement.play();
+                }
             });
-            modal.find('#stopButton').text('Stop').show().off('click').on('click', () => {
+            $card.find('.stop-btn').text('Stop').show().on('click', () => {
                 saveProgress();
-                modal.modal('hide');
             });
         }
-        modal.modal('show');
     }
 
     function saveProgress(isCompleted = false) {
@@ -446,11 +547,11 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.status === 'success') {
                     $('#itemCount').html(`There are <strong>${response.stats.remaining_items}</strong> items due for revision.`);
+                    $('#revisionContainer').addClass('d-none');
+                    $('#welcomeBlock').removeClass('d-none');
                     $('#welcomeBlock').prepend(
                         `<div class="alert alert-success mb-3">${response.message}</div>`
                     );
-                    $('#revisionContainer').addClass('d-none');
-                    $('#welcomeBlock').removeClass('d-none');
                     if (response.redirect_url) {
                         window.location.href = response.redirect_url;
                     }
@@ -465,8 +566,6 @@ $(document).ready(function() {
     }
 
     function handleAnswer(isCorrect, $button) {
-        const audio = isCorrect ? document.getElementById('audio-correct') : document.getElementById('audio-wrong');
-        audio.play();
         $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
         $button.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'));
         
@@ -478,7 +577,7 @@ $(document).ready(function() {
             const reviseAt = currentItem.revise_at ? new Date(currentItem.revise_at) : null;
             
             if (!reviseAt || now > reviseAt) {
-                temp = currentItem.next_2;
+                let temp = currentItem.next_2;
                 currentItem.next_2 = currentItem.next_1 + currentItem.next_2;
                 currentItem.next_1 = temp;
                 
@@ -518,11 +617,19 @@ $(document).ready(function() {
         handleAnswer(isCorrect, $(this));
     });
 
-    $(document).on('click', '.bi-volume-up', function() {
+    $(document).on('click', '.question-audio-icon', function() {
         const audioElement = $(this).closest('.question-content').find('audio')[0];
         if (audioElement) {
             audioElement.currentTime = 0;
-            audioElement.play().catch(error => console.error('Audio click error:', error));
+            audioElement.play();
+        }
+    });
+
+    $(document).on('click', '.feedback-audio-icon', function() {
+        const audioElement = $(this).closest('.question-content').find('audio')[0];
+        if (audioElement) {
+            audioElement.currentTime = 0;
+            audioElement.play();
         }
     });
 
@@ -537,7 +644,7 @@ $(document).ready(function() {
         if (currentItem) {
             currentItem.continue_revision = false;
             revisedItems.push(currentItem);
-            $(currentItem.element).attr('data-item-continuerevision', 'false');  
+            $(currentItem.element).attr('data-item-continuerevision', 'false');
         }
         $('#skipConfirmationModal').modal('hide');
         processNextItem();
@@ -545,10 +652,6 @@ $(document).ready(function() {
 
     $('#skipCancelButton').click(function() {
         $('#skipConfirmationModal').modal('hide');
-    });
-
-    $('#stopButton').click(function() {
-        saveProgress();
     });
 });
 </script>

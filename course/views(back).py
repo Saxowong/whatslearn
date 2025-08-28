@@ -628,8 +628,6 @@ def course_view(request, course_id):
         },
     )
 
-
-
 @login_required
 def activity_view(request, activity_id):
     # Get the activity and verify course enrollment
@@ -738,7 +736,6 @@ def activity_view(request, activity_id):
             item.updated_at = student_item.updated_at if student_item else None
             item.next_1 = student_item.next_1 if student_item else 1
             item.next_2 = student_item.next_2 if student_item else 1
-            item.audio_play = getattr(student_item, 'audio_play', 'start')  # Default to 'start' if not set
             # Log item data for debugging
             logger.debug(f"Processing item ID: {item.id}, Type: {item.item_type}, Question: {item.question}")
             logger.debug(f"Answers: answer1={getattr(item, 'answer1', None)}, answer2={getattr(item, 'answer2', None)}, answer3={getattr(item, 'answer3', None)}, answer4={getattr(item, 'answer4', None)}")
