@@ -134,6 +134,7 @@ class Item(models.Model):
         ("both", "Play at Both"),
     ]
     item_type = models.CharField(max_length=10, choices=ITEM_TYPES, default="card")
+    item_category = models.CharField(max_length=20, blank=True, null=True) 
     title = models.CharField(max_length=100)  # Title of the activity item
     question = models.TextField()  # Question associated with the activity item
     activity = models.ForeignKey(
@@ -145,8 +146,9 @@ class Item(models.Model):
     image = models.ImageField(upload_to=item_media_path, blank=True, null=True)
     audio = models.FileField(upload_to=item_media_path, blank=True, null=True, validators=[FileExtensionValidator(allowed_extensions=['mp3', 'wav', 'ogg', 'm4a'])])
     audio_play = models.CharField(max_length=6, choices=PLAY_AUDIO, default="start", null=True, blank=True)
-    answer = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
-    answer1 = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
+    number_answers = models.SmallIntegerField(default=1, blank=True, null=True)  # Number of answers for MCQ
+    answer = models.CharField(max_length=100, blank=True, null=True) 
+    answer1 = models.CharField(max_length=100, blank=True, null=True)   # Answer to the question
     answer2 = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
     answer3 = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question
     answer4 = models.CharField(max_length=100, blank=True, null=True)  # Answer to the question

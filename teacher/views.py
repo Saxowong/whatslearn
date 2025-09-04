@@ -376,16 +376,17 @@ def edit_activity(request, lesson_id, activity_id=0):
         activity = get_object_or_404(Activity, id=activity_id, lesson=lesson)
     else:
         activity = None
+
     if request.method == "POST":
         form = ActivityForm(request.POST, request.FILES, instance=activity)
         if form.is_valid():
             activity = form.save(commit=False)
-            if not activity_id:
-                activity.lesson = lesson
-                activity.save()  # Save to generate activity.id for pdf_media_path
-            # Handle PDF file upload
-            if "pdf_file" in request.FILES:
-                old_pdf_path = activity.pdf_file.path if activity and activity.pdf_file else None
+            activity.lesson = lesson if not activity_id else activity.lesson
+            activity.save()  # Save to generate activity.id for pdf_media_path
+
+            # Handle PDF file upload for pdf activities
+            if form.cleaned_data['activity_type'] == 'pdf' and "pdf_file" in request.FILES:
+                old_pdf_path = activity.pdf_file.path if activity.pdf_file else None
                 if old_pdf_path and os.path.exists(old_pdf_path):
                     try:
                         os.remove(old_pdf_path)
@@ -398,20 +399,27 @@ def edit_activity(request, lesson_id, activity_id=0):
                 os.makedirs(full_media_path, exist_ok=True)
                 filename = os.path.basename(pdf_file.name)
                 activity.pdf_file.save(os.path.join(media_path, filename), pdf_file)
+
+            # Log HTML content for exercise activities
+            if form.cleaned_data['activity_type'] == 'html':
+                logger.info(f"Saving html_content for activity {activity.id or 'new'}: {form.cleaned_data['html_content'][:100]}...")
+
             activity.save()
+
             # Resequence orders after saving
-            activities = Activity.objects.filter(lesson=lesson).order_by(
-                "order", "created_at"
-            )
+            activities = Activity.objects.filter(lesson=lesson).order_by("order", "created_at")
             for index, act in enumerate(activities, start=1):
                 act.order = index
                 act.save()
+
             return redirect("teacher:manage_activities", lesson_id=lesson.id)
         else:
+            logger.error(f"Form errors: {form.errors.as_json()}")
             error = "Please correct the errors below"
     else:
         form = ActivityForm(instance=activity)
         error = None
+
     return render(
         request,
         "teacher/edit_activity.html",
@@ -423,7 +431,6 @@ def edit_activity(request, lesson_id, activity_id=0):
             "activity_types": Activity.ACTIVITY_TYPES,
         },
     )
-
 
 @login_required
 def delete_activity(request, activity_id):
@@ -511,7 +518,6 @@ def manage_items(request, activity_id):
         "items": items,
     }
     return render(request, "teacher/manage_items.html", context)
-
 
 
 @login_required

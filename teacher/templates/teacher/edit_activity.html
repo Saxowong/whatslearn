@@ -62,22 +62,23 @@
                     <label for="id_title" class="form-label">Activity Title</label>
                     <input type="text" id="id_title" name="title" class="form-control" value="{{ activity.title|default:'' }}" required>
                 </div>
-                <div class="mb-3" id="html-fields" style="display: {% if activity.activity_type == 'html' or not activity.activity_type %}block{% else %}none{% endif %}">
+                <div class="mb-3" id="html-fields" style="display: {% if activity.activity_type == 'html' or activity.activity_type == 'exercise' or not activity.activity_type %}block{% else %}none{% endif %}">
                     <label for="id_html_content" class="form-label">Description</label>
                     <textarea id="id_html_content" name="html_content" class="form-control ckeditor">{{ activity.html_content|default:'' }}</textarea>
+                    <small class="text-muted">Enter the description for the HTML or exercise activity (supports rich text formatting).</small>
                 </div>
                 <div class="mb-3" id="video-fields" style="display: {% if activity.activity_type == 'video' %}block{% else %}none{% endif %}">
                     <label for="id_video_embed_code" class="form-label">Video Embed Code</label>
                     <textarea id="id_video_embed_code" name="video_embed_code" class="form-control" rows="4">{{ activity.video_embed_code|default:'' }}</textarea>
-                    <small class="text-muted">Paste YouTube/Vimeo embed code here</small>
+                    <small class="text-muted">Paste YouTube/Vimeo embed code here.</small>
                 </div>
                 <div class="mb-3" id="pdf-fields" style="display: {% if activity.activity_type == 'pdf' %}block{% else %}none{% endif %}">
                     <label for="id_pdf_file" class="form-label">PDF File</label>
                     <input type="file" id="id_pdf_file" name="pdf_file" class="form-control" accept="application/pdf">
                     {% if activity.pdf_file %}
-                    <small class="text-muted"><a href="{{ activity.pdf_file.url }}" target="_blank">{{ activity.pdf_file.name}}</a></small>
+                    <small class="text-muted"><a href="{{ activity.pdf_file.url }}" target="_blank">{{ activity.pdf_file.name }}</a></small>
                     {% endif %}
-                    <small class="text-muted">Upload a PDF file (replaces existing file if any)</small>
+                    <small class="text-muted">Upload a PDF file (replaces existing file if any).</small>
                 </div>
                 {% if activity.id %}
                 <div class="mb-3">
@@ -132,13 +133,14 @@ $(document).ready(function() {
                 }
             })
             .catch(error => {
-                console.error(error);
+                console.error('CKEditor initialization error:', error);
             });
     }
     // Show/hide fields based on activity type
     $('#id_activity_type').change(function() {
         const type = $(this).val();
-        $('#html-fields').toggle(type === 'html');
+        console.log('Activity type changed:', type);
+        $('#html-fields').toggle(type === 'html' || type === 'exercise');
         $('#video-fields').toggle(type === 'video');
         $('#pdf-fields').toggle(type === 'pdf');
     });

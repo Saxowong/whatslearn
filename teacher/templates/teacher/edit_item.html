@@ -33,19 +33,27 @@
                 {% if error %}
                 <div class="alert alert-danger mb-3">{{ error }}</div>
                 {% endif %}
+                <input type="hidden" name="number_answers" id="id_number_answers" value="{{ form.number_answers.value|default_if_none:'0' }}">
                 <div class="row">
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-5 mb-3">
                         <label for="id_title" class="form-label">Item Title</label>
                         {{ form.title }}
                         {% if form.title.errors %}
                         <div class="invalid-feedback d-block">{{ form.title.errors }}</div>
                         {% endif %}
                     </div>
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-3 mb-3">
                         <label for="id_item_type" class="form-label">Item Type</label>
                         {{ form.item_type }}
                         {% if form.item_type.errors %}
                         <div class="invalid-feedback d-block">{{ form.item_type.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="id_item_category" class="form-label">Item Category</label>
+                        {{ form.item_category }}
+                        {% if form.item_category.errors %}
+                        <div class="invalid-feedback d-block">{{ form.item_category.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
@@ -53,16 +61,23 @@
                     <div class="col-md-6 mb-3">
                         <label for="id_question" class="form-label">Question</label>
                         {{ form.question }}
+                        <small id="blank-count-feedback" class="form-text text-muted"></small>
                         {% if form.question.errors %}
                         <div class="invalid-feedback d-block">{{ form.question.errors }}</div>
                         {% endif %}
                     </div>
-                    <div class="col-md-6 mb-3" id="answer-field">
-                        <label for="id_answer" class="form-label">Correct Answer</label>
-                        {{ form.answer }}
-                        {% if form.answer.errors %}
-                        <div class="invalid-feedback d-block">{{ form.answer.errors }}</div>
-                        {% endif %}
+                    <div class="col-md-6 mb-3" id="dynamic-field">
+                        <div id="answer-field" class="hidden">
+                            <label for="id_answer" class="form-label">Correct Answer</label>
+                            {{ form.answer }}
+                            {% if form.answer.errors %}
+                            <div class="invalid-feedback d-block">{{ form.answer.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div id="number-answers-field" class="hidden">
+                            <label for="id_number_answers_display" class="form-label">Number of Blanks</label>
+                            <input type="number" id="id_number_answers_display" class="form-control" readonly value="{{ form.number_answers.value|default_if_none:'0' }}">
+                        </div>
                     </div>
                 </div>
                 <div class="row">
@@ -121,18 +136,20 @@
                     </div>
                 </div>
                 <div class="row">
+                    <div class="col-md-6 mb-3" id="audio-play-field">
+                        <label for="id_audio_play" class="form-label">Audio Playback</label>
+                        {{ form.audio_play }}
+                        {% if form.audio_play.errors %}
+                        <div class="invalid-feedback d-block">{{ form.audio_play.errors }}</div>
+                        {% endif %}
+                    </div>
                     <div class="col-md-6 mb-3">
-                        {% if item.id %}
                         <label for="id_order" class="form-label">Order</label>
                         {{ form.order }}
                         {% if form.order.errors %}
                         <div class="invalid-feedback d-block">{{ form.order.errors }}</div>
                         {% endif %}
-                        {% else %}
-                        <input type="hidden" name="order" value="10000">
-                        {% endif %}
                     </div>
-                    <div class="col-md-6 mb-3"></div>
                 </div>
                 <div class="d-flex justify-content-end gap-2">
                     <a href="{% url 'teacher:manage_items' activity.id %}" class="btn btn-secondary">Cancel</a>
@@ -152,6 +169,7 @@
     .form-control, .form-select { width: 100%; }
     .dropzone { min-height: 150px; border: 2px dashed #ccc; padding: 20px; background: #fafafa; }
     .hidden { display: none; }
+    #id_number_answers_display { background-color: #f8f9fa; cursor: not-allowed; }
 </style>
 {% endblock %}
 {% block extra_js %}
@@ -161,9 +179,7 @@ Dropzone.autoDiscover = false;
 document.addEventListener('DOMContentLoaded', function() {
     var dropzoneElement = document.getElementById('image-dropzone');
     var isHovering = false;
-    // Make dropzone focusable
     dropzoneElement.setAttribute('tabindex', '0');
-    // Track mouse hover state and change background color
     dropzoneElement.addEventListener('mouseenter', function() {
         isHovering = true;
         dropzoneElement.style.backgroundColor = '#e0e0e0';
@@ -226,16 +242,50 @@ document.addEventListener('DOMContentLoaded', function() {
             dropzone.addFile(file);
         }
     });
-    // Dynamic field visibility based on item_type
+    // Dynamic field visibility and number_answers calculation
     var itemTypeSelect = document.getElementById('id_item_type');
+    var questionInput = document.getElementById('id_question');
+    var numberAnswersInput = document.getElementById('id_number_answers');
+    var numberAnswersDisplay = document.getElementById('id_number_answers_display');
+    var numberAnswersField = document.getElementById('number-answers-field');
+    var blankCountFeedback = document.getElementById('blank-count-feedback');
     var answerField = document.getElementById('answer-field');
+    var dynamicField = document.getElementById('dynamic-field');
     var answer1Field = document.getElementById('answer1-field');
     var answer2Field = document.getElementById('answer2-field');
     var answer3Field = document.getElementById('answer3-field');
     var answer4Field = document.getElementById('answer4-field');
-    var questionField = document.getElementById('id_question');
-    function updateFieldVisibility() {
-        var itemType = itemTypeSelect.value;
+    var audioField = document.getElementById('id_audio');
+    var audioPlayField = document.getElementById('audio-play-field');
+    var hasAudio = {% if item.audio %}true{% else %}false{% endif %};
+    function updateNumberAnswers() {
+        if (itemTypeSelect.value === 'blank') {
+            var questionText = questionInput.value || '';
+            // Replace sequences of 3 or more underscores with exactly 4 underscores
+            var normalizedText = questionText.replace(/_{3,}/g, '____');
+            if (questionText !== normalizedText) {
+                questionInput.value = normalizedText;
+            }
+            // Count sequences of 4 underscores (after normalization)
+            var underscoreCount = (normalizedText.match(/____/g) || []).length;
+            var numAnswers = Math.min(underscoreCount, 4); // Limit to 4 answers
+            numberAnswersInput.value = numAnswers;
+            numberAnswersDisplay.value = numAnswers;
+            numberAnswersField.classList.remove('hidden');
+            answerField.classList.add('hidden');
+            blankCountFeedback.textContent = underscoreCount > 0
+                ? `Detected ${underscoreCount} blank(s) (3 or more underscores normalized to ____). Number of answers set to ${numAnswers}.`
+                : 'No blanks detected. Use 3 or more underscores (e.g., ___) for each blank.';
+            updateAnswerFields(numAnswers);
+        } else {
+            numberAnswersInput.value = 0;
+            numberAnswersDisplay.value = 0;
+            numberAnswersField.classList.add('hidden');
+            blankCountFeedback.textContent = '';
+            updateAnswerFields(0);
+        }
+    }
+    function updateAnswerFields(numAnswers) {
         // Reset visibility and required attributes
         answerField.classList.add('hidden');
         answer1Field.classList.add('hidden');
@@ -247,57 +297,48 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('id_answer2').required = false;
         document.getElementById('id_answer3').required = false;
         document.getElementById('id_answer4').required = false;
-        if (itemType === 'card') {
+        var itemType = itemTypeSelect.value;
+        if (itemType === 'card' || itemType === 'mc') {
             answerField.classList.remove('hidden');
-        } else if (itemType === 'mc') {
-            answerField.classList.remove('hidden');
-            answer1Field.classList.remove('hidden');
-            answer2Field.classList.remove('hidden');
-            answer3Field.classList.remove('hidden');
-            answer4Field.classList.remove('hidden');
+            dynamicField.classList.remove('hidden');
             document.getElementById('id_answer').required = true;
-            document.getElementById('id_answer1').required = true;
-            document.getElementById('id_answer2').required = true;
-            document.getElementById('id_answer3').required = true;
-            document.getElementById('id_answer4').required = true;
+            if (itemType === 'mc') {
+                answer1Field.classList.remove('hidden');
+                answer2Field.classList.remove('hidden');
+                answer3Field.classList.remove('hidden');
+                answer4Field.classList.remove('hidden');
+                document.getElementById('id_answer1').required = true;
+                document.getElementById('id_answer2').required = true;
+                document.getElementById('id_answer3').required = true;
+                document.getElementById('id_answer4').required = true;
+            }
         } else if (itemType === 'blank') {
-            updateBlankFields();
-        }
-    }
-    function updateBlankFields() {
-        var question = questionField.value;
-        var blankCount = (question.match(/___/g) || []).length;
-        answer1Field.classList.add('hidden');
-        answer2Field.classList.add('hidden');
-        answer3Field.classList.add('hidden');
-        answer4Field.classList.add('hidden');
-        document.getElementById('id_answer1').required = false;
-        document.getElementById('id_answer2').required = false;
-        document.getElementById('id_answer3').required = false;
-        document.getElementById('id_answer4').required = false;
-        if (blankCount >= 1) {
+            dynamicField.classList.remove('hidden');
             answer1Field.classList.remove('hidden');
-            document.getElementById('id_answer1').required = true;
-        }
-        if (blankCount >= 2) {
             answer2Field.classList.remove('hidden');
-            document.getElementById('id_answer2').required = true;
-        }
-        if (blankCount >= 3) {
             answer3Field.classList.remove('hidden');
-            document.getElementById('id_answer3').required = true;
-        }
-        if (blankCount >= 4) {
             answer4Field.classList.remove('hidden');
-            document.getElementById('id_answer4').required = true;
+            document.getElementById('id_answer1').required = numAnswers >= 1;
+            document.getElementById('id_answer2').required = numAnswers >= 2;
+            document.getElementById('id_answer3').required = numAnswers >= 3;
+            document.getElementById('id_answer4').required = numAnswers >= 4;
+        } else {
+            dynamicField.classList.add('hidden');
         }
+        updateAudioPlayRequirement();
     }
-    updateFieldVisibility();
-    itemTypeSelect.addEventListener('change', updateFieldVisibility);
-    questionField.addEventListener('input', function() {
-        if (itemTypeSelect.value === 'blank') {
-            updateBlankFields();
-        }
+    function updateAudioPlayRequirement() {
+        var audioPlayInput = document.getElementById('id_audio_play');
+        var isRequired = hasAudio || audioField.files.length > 0;
+        audioPlayInput.required = isRequired;
+    }
+    // Initialize fields based on current item_type and question
+    updateNumberAnswers();
+    itemTypeSelect.addEventListener('change', updateNumberAnswers);
+    questionInput.addEventListener('input', updateNumberAnswers);
+    questionInput.addEventListener('paste', function() {
+        // Delay to allow pasted text to be processed
+        setTimeout(updateNumberAnswers, 0);
     });
 });
 </script>

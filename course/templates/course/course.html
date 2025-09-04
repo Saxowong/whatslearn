@@ -103,7 +103,7 @@
         <div class="col-12 col-md-4 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h6 class="mb-0">Course Progress</h6>
+                    <h6 class="mb-0">Progress</h6>
                 </div>
                 <div class="list-group">
                     <div class="list-group-item list-group-item-action d-flex flex-column">
@@ -112,12 +112,23 @@
                             <span class="badge rounded-pill bg-primary ms-auto" id="activities-completed" aria-live="polite">{{ course.activities_completed|default_if_none:"0" }}</span>
                         </div>
                     </div>
-                    <div class="list-group-item list-group-item-action d-flex flex-column">
-                        <div class="d-flex align-items-center w-100 mb-2">
-                            <span>Exercise Items Mastered</span>
-                            <span class="badge rounded-pill bg-success ms-auto">{{ course.exercise_items_mastered|default_if_none:"0" }}</span>
+                    {% for cat in category_progress %}
+                        {% if cat.item__item_category %}
+                            <div class="list-group-item list-group-item-action d-flex flex-column">
+                                <div class="d-flex align-items-center w-100 mb-2">
+                                    <span>{{ cat.item__item_category }} Items</span>
+                                    <span class="badge rounded-pill bg-info ms-auto">{{ cat.mastered_count|default_if_none:"0" }}</span>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                    {% if not category_progress %}
+                        <div class="list-group-item list-group-item-action d-flex flex-column">
+                            <div class="d-flex align-items-center w-100 mb-2">
+                                <span>No categories available</span>
+                            </div>
                         </div>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -192,12 +203,10 @@
 if (typeof jQuery === 'undefined') {
     document.write('<script src="/static/js/jquery-3.6.0.min.js"><\/script>');
 }
-
 $(document).ready(function() {
     // Initialize badge
     const $badge = $('#activities-completed');
     console.log('Initial activities completed:', $badge.text() || '0');
-
     /**
      * Updates the Activities Completed badge count
      * @param {boolean} isCompleted - Whether the checkbox is checked
@@ -213,7 +222,6 @@ $(document).ready(function() {
             console.error('Badge element #activities-completed not found');
         }
     }
-
     /**
      * Shows an error alert to the user
      * @param {string} message - Error message to display
@@ -225,22 +233,18 @@ $(document).ready(function() {
         }
         $alert.text(message).show().delay(3000).fadeOut();
     }
-
     // Activity completion handling
     $('.activity-checkbox').on('change', function() {
         const $checkbox = $(this);
         const activityId = $checkbox.data('activity-id');
         const isCompleted = $checkbox.is(':checked');
         console.log('Checkbox changed:', { activityId, isCompleted });
-
         // Handle non-exercise activities only
         if ($checkbox.closest('.list-group-item').find('.progress').length === 0) {
             const url = '{% url "course:submit_activity" 0 %}'.replace('0', activityId);
             console.log('Sending AJAX request to:', url);
-
             // Show loading state
             $checkbox.prop('disabled', true).addClass('loading');
-
             $.ajax({
                 url: url,
                 type: 'POST',
@@ -264,7 +268,6 @@ $(document).ready(function() {
             console.log('Skipping AJAX for exercise activity');
         }
     });
-
     // Unsubscribe handling
     $('.confirm-unsubscribe').on('click', function() {
         const $button = $(this);
@@ -272,11 +275,9 @@ $(document).ready(function() {
         const $form = $('#' + formId);
         const $modal = $button.closest('.modal');
         const url = $form.attr('action');
-
         // Show loading state
         $button.prop('disabled', true).addClass('loading');
         $modal.find('.btn-secondary').prop('disabled', true); // Disable Cancel button
-
         $.ajax({
             url: url,
             type: 'POST',

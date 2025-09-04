@@ -32,7 +32,6 @@
                         <th>Category</th>
                         <th>Lessons</th>
                         <th>Publish?</th>
-                        <th>Created At</th>
                         <th>Updated At</th>
                         <th>Actions</th>
                     </tr>
@@ -47,7 +46,6 @@
                         <td>
                             <input type="checkbox" class="form-check-input" id="publish_{{ course.id }}" {% if course.is_published %}checked{% endif %} disabled>
                         </td>
-                        <td data-order="{{ course.created_at|date:'c' }}">{{ course.created_at|date:"Y-m-d H:i:s" }}</td>
                         <td data-order="{{ course.updated_at|date:'c' }}">{{ course.updated_at|date:"Y-m-d H:i:s" }}</td>
                         <td>
                             <a href="{% url 'teacher:edit_course' course.id %}" class="btn btn-sm btn-primary">
@@ -66,7 +64,6 @@
                     {% empty %}
                         <tr>
                             <td>No courses found</td>
-                            <td></td>
                             <td></td>
                             <td></td>
                             <td></td>
@@ -180,7 +177,7 @@ $(document).ready(function() {
                 }
             },
             {
-                targets: [5, 6], // Created At, Updated At
+                targets: [5], // Created At, Updated At
                 type: 'date',
                 render: function(data, type, row, meta) {
                     if (type === 'display') {

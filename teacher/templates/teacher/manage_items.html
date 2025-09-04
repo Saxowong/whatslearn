@@ -56,7 +56,7 @@
                             <th>Item Type</th>
                             <th>Item Title</th>
                             <th>Question</th>
-                            <th>Answer</th>
+                            <th># Answers</th>
                             <th>Created At</th>
                             <th>Actions</th>
                         </tr>
@@ -71,7 +71,7 @@
                             <td>{{ item.get_item_type_display|default:"N/A" }}</td>
                             <td>{{ item.title|default:"Untitled" }}</td>
                             <td>{{ item.question|truncatechars:50|default:"N/A" }}</td>
-                            <td>{{ item.answer|default:"N/A" }}</td>
+                            <td>{{ item.number_answers|default:"N/A" }}</td>
                             <td data-sort="{{ item.created_at|date:'c'|default:'1970-01-01T00:00:00Z' }}">{{ item.created_at|date:"Y-m-d H:i:s"|default:"N/A" }}</td>
                             <td>
                                 <a href="{% url 'teacher:edit_item' activity.id item.id %}" class="btn btn-sm btn-primary" aria-label="Edit item">

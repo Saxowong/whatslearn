@@ -340,7 +340,7 @@ class ActivityAdmin(admin.ModelAdmin):
                     item.save()
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ("title", "activity", "question", "answer", "order")
+    list_display = ("title", "activity", "question", "answer", "number_answers", "order")
     search_fields = (
         "title",
         "question",

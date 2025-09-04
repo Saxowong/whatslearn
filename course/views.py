@@ -593,19 +593,19 @@ def course_view(request, course_id):
                 .values("count")[:1],
                 output_field=IntegerField()
             ),
-            exercise_items_mastered=Subquery(
-                StudentItem.objects.filter(
-                    student=student_profile,
-                    item__activity__lesson__course=OuterRef("pk"),
-                    successes__gte=3,
-                )
-                .values("student")
-                .annotate(count=Count("id"))
-                .values("count")[:1],
-                output_field=IntegerField()
-            ),
         ),
         id=course_id,
+    )
+    # Calculate category progress: count of mastered items per item_category
+    category_progress = (
+        StudentItem.objects.filter(
+            student=student_profile,
+            item__activity__lesson__course=course,
+            successes__gte=3,
+        )
+        .values("item__item_category")
+        .annotate(mastered_count=Count("id"))
+        .order_by("item__item_category")
     )
     # Assign continuous numbering to activities across lessons
     activity_counter = 1
@@ -625,10 +625,9 @@ def course_view(request, course_id):
         {
             "course": course,
             "student_profile": student_profile,
+            "category_progress": category_progress,
         },
     )
-
-
 
 @login_required
 def activity_view(request, activity_id):
@@ -718,9 +717,9 @@ def activity_view(request, activity_id):
             mastered_items_count if activity.activity_type == "exercise" else 0
         ),
         "progress_percentage": student_activity.progress,
-        "activities": lesson_activities,  # RHS lesson activities with global_index
-        "previous_activity": previous_activity,  # Added for Previous button
-        "next_activity": next_activity,  # Added for Next button
+        "activities": lesson_activities,
+        "previous_activity": previous_activity,
+        "next_activity": next_activity,
     }
     if activity.activity_type == "exercise":
         items = list(activity.items.all())
@@ -738,18 +737,64 @@ def activity_view(request, activity_id):
             item.updated_at = student_item.updated_at if student_item else None
             item.next_1 = student_item.next_1 if student_item else 1
             item.next_2 = student_item.next_2 if student_item else 1
-            item.audio_play = getattr(student_item, 'audio_play', 'start')  # Default to 'start' if not set
-            # Log item data for debugging
-            logger.debug(f"Processing item ID: {item.id}, Type: {item.item_type}, Question: {item.question}")
+            item.audio_play = item.audio_play or 'start'
+            logger.debug(f"Processing item ID: {item.id}, Type: {item.item_type}, Question: {item.question}, Audio Play: {item.audio_play}, Number Answers: {item.number_answers}")
             logger.debug(f"Answers: answer1={getattr(item, 'answer1', None)}, answer2={getattr(item, 'answer2', None)}, answer3={getattr(item, 'answer3', None)}, answer4={getattr(item, 'answer4', None)}")
             if item.item_type == "mc":
                 options = [getattr(item, 'answer1', ''), getattr(item, 'answer2', ''), getattr(item, 'answer3', ''), getattr(item, 'answer4', '')]
-                options = [opt for opt in options if opt.strip() != '']
+                options = [opt for opt in options if opt and opt.strip() != '']
                 shuffle(options)
                 item.options = options
-                item.correct_answer = item.answer
+                item.correct_answer = item.answer or ''
                 item.correct_sequence_json = json.dumps([])
+                item.number_answers = 0
                 logger.debug(f"MC Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}")
+            elif item.item_type == "blank":
+                # Use number_answers from the item
+                question_blanks = item.number_answers or 0
+                if question_blanks < 1 or question_blanks > 4:
+                    logger.error(f"Item ID: {item.id} has invalid blank count: {question_blanks}")
+                    item.correct_sequence = []
+                    item.options = []
+                    item.correct_sequence_json = json.dumps([])
+                    item.number_answers = 0
+                    continue
+                # Collect correct answers based on number_answers
+                correct_sequence = [str(getattr(item, f'answer{i}', '')) for i in range(1, question_blanks + 1) if getattr(item, f'answer{i}', '') and str(getattr(item, f'answer{i}', '')).strip()]
+                if len(correct_sequence) != question_blanks:
+                    logger.warning(f"Item ID: {item.id} has {question_blanks} blanks but {len(correct_sequence)} valid answers: {correct_sequence}")
+                    correct_sequence.extend(['MISSING_ANSWER'] * (question_blanks - len(correct_sequence)))
+                # Generate options: correct answers (answer1 to answerN) plus distractors (answer{N+1} to answer4)
+                options = correct_sequence.copy()
+                # Add distractors from answer{N+1} to answer4
+                distractors = [str(getattr(item, f'answer{i}', '')) for i in range(question_blanks + 1, 5) if getattr(item, f'answer{i}', '') and str(getattr(item, f'answer{i}', '')).strip()]
+                num_distractors_needed = max(0, 4 - len(options))
+                # Add distractors from other items if needed
+                if len(distractors) < num_distractors_needed:
+                    other_answers = []
+                    for i in items:
+                        if i.id != item.id:
+                            for j in range(1, 5):
+                                ans = getattr(i, f'answer{j}', '')
+                                if ans and ans.strip() and ans not in correct_sequence and ans not in distractors:
+                                    other_answers.append(ans)
+                    other_distractors = sample(other_answers, min(num_distractors_needed - len(distractors), len(other_answers)))
+                    distractors.extend(other_distractors)
+                # Fill remaining slots with generic distractors
+                if len(distractors) < num_distractors_needed:
+                    distractors.extend([f"Option {i}" for i in range(1, num_distractors_needed - len(distractors) + 1)])
+                options.extend(distractors[:num_distractors_needed])
+                shuffle(options)
+                item.options = options
+                item.correct_answer = ''
+                item.correct_sequence = correct_sequence
+                try:
+                    item.correct_sequence_json = json.dumps(correct_sequence)
+                except (TypeError, ValueError) as e:
+                    logger.error(f"JSON serialization failed for item ID: {item.id}, Correct Sequence: {correct_sequence}, Error: {e}")
+                    item.correct_sequence_json = json.dumps([])
+                item.number_answers = question_blanks
+                logger.debug(f"Blank Item ID: {item.id}, Blanks: {question_blanks}, Options: {item.options}, Correct Sequence: {correct_sequence}, JSON: {item.correct_sequence_json}")
             else:
                 # For card
                 wrong_answers = [
@@ -760,11 +805,12 @@ def activity_view(request, activity_id):
                         ["Alternative option 1", "Alternative option 2"][: 3 - len(wrong_answers)]
                     )
                 selected_wrong = sample(wrong_answers, 3)
-                options = [item.answer] + selected_wrong
+                options = [item.answer or ''] + selected_wrong
                 shuffle(options)
                 item.options = options
-                item.correct_answer = item.answer
+                item.correct_answer = item.answer or ''
                 item.correct_sequence_json = json.dumps([])
+                item.number_answers = 0
                 logger.debug(f"Card Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}")
         context["items"] = items
         template_name = "course/exercise_activity.html"

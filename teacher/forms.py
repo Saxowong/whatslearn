@@ -60,7 +60,7 @@ class ActivityForm(forms.ModelForm):
 class ItemForm(forms.ModelForm):
     class Meta:
         model = Item
-        fields = ['title', 'item_type', 'question', 'answer', 'answer1', 'answer2', 'answer3', 'answer4', 'image', 'audio', 'order']
+        fields = ['title', 'item_type', 'item_category', 'question', 'number_answers', 'answer','answer1', 'answer2', 'answer3', 'answer4', 'image', 'audio', 'audio_play', 'order']
         widgets = {
             'question': forms.Textarea(attrs={'rows': 4}),
         }
@@ -68,6 +68,7 @@ class ItemForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Set required=False for fields that are optional
+        self.fields['number_answers'].required = False
         self.fields['answer'].required = False
         self.fields['answer1'].required = False
         self.fields['answer2'].required = False
@@ -75,6 +76,7 @@ class ItemForm(forms.ModelForm):
         self.fields['answer4'].required = False
         self.fields['image'].required = False
         self.fields['audio'].required = False
+        self.fields['audio_play'].required = False
         self.fields['order'].required = False
 
     def clean(self):
