@@ -54,7 +54,6 @@
                         <tr>
                             <th>Order</th>
                             <th>Item Type</th>
-                            <th>Item Category</th>
                             <th>Item Title</th>
                             <th>Question</th>
                             <th># Answers</th>
@@ -70,7 +69,6 @@
                                 <input type="hidden" name="order_{{ item.id }}" class="order-input" value="{{ item.order|default:'0' }}">
                             </td>
                             <td>{{ item.get_item_type_display|default:"N/A" }}</td>
-                            <td>{{ item.item_category|default:"N/A" }}</td>
                             <td>{{ item.title|default:"Untitled" }}</td>
                             <td>{{ item.question|truncatechars:50|default:"N/A" }}</td>
                             <td>{{ item.number_answers|default:"N/A" }}</td>
@@ -88,7 +86,6 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td></td>
                             <td></td>
                             <td></td>
                             <td>No items found</td>
@@ -139,13 +136,7 @@
                             <label for="zip_file" class="form-label">ZIP File</label>
                             <input type="file" class="form-control" id="zip_file" name="zip_file" accept=".zip" required>
                             <br/>
-                            <small class="form-text text-muted">Upload a ZIP file containing:<ol>
-                                <li>An <b>items.xlsx</b> file with columns: title, item_type, item_category, question, answer, answer1, answer2, answer3, answer4, image_filename, audio_filename.</li>
-                                <li>For <b>item_type</b>: Use "card", "mc", or "blank".</li>
-                                <li>For <b>mc</b> items: Provide answer1, answer2, answer3, answer4, and specify the correct answer in the answer column.</li>
-                                <li>For <b>blank</b> items: Use 3+ underscores (e.g., ___) in the question for blanks, and provide answers in the answer column (comma-separated if multiple).</li>
-                                <li>Optional image (JPG/PNG) and audio (MP3/WAV/OGG/M4A) files.</li>
-                            </ol></small>
+                            <small class="form-text text-muted">Upload a ZIP file which contain the following items:<ol><li>An <b>items.xlsx</b> file (with columns: title, question, answer, image_filename, audio_filename)<li>Optional image (JPG/PNG) and audio (MP3) files.</ol></small>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -201,20 +192,20 @@ $(document).ready(function() {
                 {
                     extend: 'excelHtml5',
                     className: 'btn btn-sm btn-outline-success',
-                    exportOptions: { columns: [0, 1, 2, 3, 4, 5, 6] }
+                    exportOptions: { columns: [0, 1, 2, 3, 4, 5] }
                 },
                 {
                     extend: 'pdfHtml5',
                     className: 'btn btn-sm btn-outline-danger',
                     title: 'Items for {{ activity.title|default:"Activity"|escapejs }} - {{ request.user.get_full_name|default:request.user.username|escapejs }}',
-                    exportOptions: { columns: [0, 1, 2, 3, 4, 5, 6] }
+                    exportOptions: { columns: [0, 1, 2, 3, 4, 5] }
                 }
             ],
             responsive: true,
             order: [[0, 'asc']], // Sort by Order column
             columnDefs: [
                 {
-                    targets: 6, // Created At column
+                    targets: 5, // Created At column
                     render: function(data, type) {
                         if (type === 'display') {
                             if (!data || data === 'N/A') return 'N/A';

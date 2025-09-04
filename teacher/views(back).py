@@ -14,7 +14,6 @@ import tempfile
 from io import TextIOWrapper
 import pandas as pd
 import uuid
-import re
 
 import logging
 
@@ -657,27 +656,19 @@ def delete_item(request, item_id):
     return HttpResponseRedirect(reverse("teacher:manage_items", args=[activity_id]))
 
 
-def find_file_in_directory(directory, filename):
-    for root, _, files in os.walk(directory):
-        if filename in files:
-            return os.path.join(root, filename)
-    return None
-
-def save_media_file(src_path, dest_dir, media_path, filename):
-    os.makedirs(dest_dir, exist_ok=True)
-    dest_path = os.path.join(dest_dir, filename)
-    with open(src_path, 'rb') as src, open(dest_path, 'wb') as dest:
-        dest.write(src.read())
-    return os.path.join(media_path, filename)
-
 def import_items(request, activity_id):
     activity = get_object_or_404(Activity, id=activity_id)
     course = activity.lesson.course
+
     if request.method == "POST":
         zip_file = request.FILES.get("zip_file")
         if not zip_file:
             messages.error(request, "No ZIP file provided")
-            return redirect("teacher:manage_items", activity_id=activity.id)
+            return redirect(
+                "teacher:manage_items",
+                lesson_id=activity.lesson.id,
+                activity_id=activity.id,
+            )
 
         try:
             # Create temporary directory
@@ -694,23 +685,37 @@ def import_items(request, activity_id):
 
                 # Find Excel file in extracted contents
                 excel_files = [
-                    f for f in os.listdir(temp_dir)
-                    if f.lower().startswith("items.") and f.lower().endswith((".xls", ".xlsx"))
+                    f
+                    for f in os.listdir(temp_dir)
+                    if f.lower().startswith("items.")
+                    and f.lower().endswith((".xls", ".xlsx"))
                 ]
+
                 if not excel_files:
-                    messages.error(request, "No items.xls or items.xlsx found in ZIP file")
-                    return redirect("teacher:manage_items", activity_id=activity.id)
+                    messages.error(
+                        request, "No items.xls or items.xlsx found in ZIP file"
+                    )
+                    return redirect(
+                        "teacher:manage_items",
+                        lesson_id=activity.lesson.id,
+                        activity_id=activity.id,
+                    )
 
                 # Process first Excel file found
                 excel_path = os.path.join(temp_dir, excel_files[0])
+
+                # Read Excel file
                 df = pd.read_excel(excel_path)
 
                 # Validate required columns
-                required_columns = ["title", "item_type", "item_category", "question", "answer"]
+                required_columns = ["title", "question", "answer"]
                 for col in required_columns:
                     if col not in df.columns:
                         messages.error(request, f"Missing required column: {col}")
-                        return redirect("teacher:manage_items", activity_id=activity.id)
+                        return redirect(
+                            "teacher:manage_items",
+                            activity_id=activity.id,
+                        )
 
                 # Create media directory if needed
                 media_path = os.path.join("courses", str(course.id), str(activity.id))
@@ -718,108 +723,71 @@ def import_items(request, activity_id):
                 os.makedirs(full_media_path, exist_ok=True)
 
                 # Get current max order value from existing items
-                current_max_order = Item.objects.filter(activity=activity).aggregate(Max("order"))["order__max"] or 0
+                current_max_order = (
+                    Item.objects.filter(activity=activity).aggregate(Max("order"))[
+                        "order__max"
+                    ]
+                    or 0
+                )
                 next_order = current_max_order + 1
-
-                # Valid item types
-                valid_item_types = [choice[0] for choice in Item.ITEM_TYPES]
 
                 # Process each row
                 success_count = 0
                 for _, row in df.iterrows():
                     try:
-                        item_type = str(row["item_type"]).strip().lower()
-                        if item_type not in valid_item_types:
-                            messages.error(request, f"Invalid item_type '{item_type}' for item '{row['title']}'")
-                            continue
-
-                        # Initialize item fields
-                        item_data = {
-                            "activity": activity,
-                            "title": str(row["title"]),
-                            "item_type": item_type,
-                            "item_category": str(row["item_category"]) if pd.notna(row["item_category"]) else "",
-                            "order": next_order,
-                            "answer": str(row["answer"]) if pd.notna(row["answer"]) else "",
-                        }
-
-                        # Handle answer1 to answer4 if provided
-                        answer_columns = ["answer1", "answer2", "answer3", "answer4"]
-                        if all(col in df.columns for col in answer_columns):
-                            for i, col in enumerate(answer_columns, 1):
-                                if pd.notna(row.get(col)):
-                                    item_data[f"answer{i}"] = str(row[col]).strip()
-
-                        # Handle fill-in-the-blank questions
-                        if item_type == "blank":
-                            question = str(row["question"]) if pd.notna(row["question"]) else ""
-                            # Find sequences of 3 or more underscores and replace with exactly 4
-                            question = re.sub(r'_{3,}', '____', question)
-                            item_data["question"] = question
-                            # Count number of blanks
-                            blanks = len(re.findall(r'____', question))
-                            item_data["number_answers"] = blanks if blanks > 0 else 1
-                            # Ensure answer is stored (comma-separated for multiple blanks)
-                            if pd.notna(row["answer"]):
-                                item_data["answer"] = str(row["answer"]).strip()
-
-                        # Handle multiple choice questions
-                        elif item_type == "mc":
-                            # Validate answer columns
-                            if not all(col in df.columns for col in answer_columns):
-                                messages.error(request, f"Missing answer columns for MC item '{row['title']}'")
-                                continue
-                            if not all(pd.notna(row[col]) for col in answer_columns):
-                                messages.error(request, f"MC item '{row['title']}' must have all four answers")
-                                continue
-                            item_data["question"] = str(row["question"])
-                            item_data["number_answers"] = 4
-                            item_data["answer1"] = str(row["answer1"])
-                            item_data["answer2"] = str(row["answer2"])
-                            item_data["answer3"] = str(row["answer3"])
-                            item_data["answer4"] = str(row["answer4"])
-                            # Verify the answer is one of the provided options
-                            if pd.notna(row["answer"]) and item_data["answer"] not in [item_data[f"answer{i+1}"] for i in range(4)]:
-                                messages.error(request, f"Correct answer for MC item '{row['title']}' must match one of answer1-4")
-                                continue
-
-                        # Handle flash card (card) items
-                        else:
-                            item_data["question"] = str(row["question"])
-                            item_data["number_answers"] = 1
-                            if pd.notna(row["answer"]):
-                                item_data["answer"] = str(row["answer"]).strip()
-
-                        # Create item
-                        item = Item(**item_data)
+                        # Create new exercise item with sequential order
+                        item = Item(
+                            activity=activity,
+                            title=row["title"],
+                            question=row["question"],
+                            answer=row["answer"],
+                            order=next_order,
+                        )
+                        next_order += 1
 
                         # Handle image file if exists
-                        if "image_filename" in df.columns and pd.notna(row.get("image_filename")):
-                            img_filename = str(row["image_filename"])
+                        if "image_filename" in df.columns and pd.notna(
+                            row.get("image_filename")
+                        ):
+                            img_filename = row["image_filename"]
                             img_path = find_file_in_directory(temp_dir, img_filename)
                             if img_path:
-                                item.image = save_media_file(img_path, full_media_path, media_path, img_filename)
+                                item.image = save_media_file(
+                                    img_path, full_media_path, media_path, img_filename
+                                )
 
                         # Handle audio file if exists
-                        if "audio_filename" in df.columns and pd.notna(row.get("audio_filename")):
-                            audio_filename = str(row["audio_filename"])
-                            audio_path = find_file_in_directory(temp_dir, audio_filename)
+                        if "audio_filename" in df.columns and pd.notna(
+                            row.get("audio_filename")
+                        ):
+                            audio_filename = row["audio_filename"]
+                            audio_path = find_file_in_directory(
+                                temp_dir, audio_filename
+                            )
                             if audio_path:
-                                item.audio = save_media_file(audio_path, full_media_path, media_path, audio_filename)
+                                item.audio = save_media_file(
+                                    audio_path,
+                                    full_media_path,
+                                    media_path,
+                                    audio_filename,
+                                )
 
                         item.save()
                         success_count += 1
-                        next_order += 1
-
                     except Exception as e:
-                        messages.error(request, f"Error processing item '{row.get('title', '')}': {str(e)}")
+                        print(f"Error processing item {row.get('title', '')}: {str(e)}")
 
-                messages.success(request, f"Successfully imported {success_count} out of {len(df)} items")
-                return redirect("teacher:manage_items", activity_id=activity.id)
+                messages.success(
+                    request,
+                    f"Successfully imported {success_count} out of {len(df)} items",
+                )
+                return redirect(
+                    "teacher:manage_items",
+                    activity_id=activity.id,
+                )
 
         except Exception as e:
             messages.error(request, f"Error processing ZIP file: {str(e)}")
-            return redirect("teacher:manage_items", activity_id=activity.id)
 
     return redirect("teacher:manage_items", activity_id=activity.id)
 
