@@ -539,6 +539,10 @@ def edit_item(request, activity_id, item_id):
             os.makedirs(full_media_path, exist_ok=True)
             item = form.save(commit=False)
             item.activity = activity
+            # Set number_answers based on item_type
+            if item.item_type in ['mc', 'card']:
+                item.number_answers = 1
+            # For 'blank' items, number_answers is set by the form (based on blanks)
             # Handle file uploads
             if "image" in request.FILES:
                 image_file = request.FILES["image"]
@@ -582,9 +586,9 @@ def edit_item(request, activity_id, item_id):
             error = "Please correct the errors below"
     else:
         initial = (
-            {"order": Item.objects.filter(activity=activity).count() + 1}
+            {"order": Item.objects.filter(activity=activity).count() + 1, "number_answers": 1}
             if not item
-            else {}
+            else {"number_answers": 1 if item.item_type in ['mc', 'card'] else item.number_answers}
         )
         form = ItemForm(instance=item, initial=initial)
         error = None
@@ -599,6 +603,8 @@ def edit_item(request, activity_id, item_id):
             "form": form,
         },
     )
+
+
 
 @login_required
 def delete_item(request, item_id):
@@ -669,6 +675,7 @@ def save_media_file(src_path, dest_dir, media_path, filename):
     with open(src_path, 'rb') as src, open(dest_path, 'wb') as dest:
         dest.write(src.read())
     return os.path.join(media_path, filename)
+
 
 def import_items(request, activity_id):
     activity = get_object_or_404(Activity, id=activity_id)
@@ -773,7 +780,7 @@ def import_items(request, activity_id):
                                 messages.error(request, f"MC item '{row['title']}' must have all four answers")
                                 continue
                             item_data["question"] = str(row["question"])
-                            item_data["number_answers"] = 4
+                            item_data["number_answers"] = 1  # Set to 1 for mc items
                             item_data["answer1"] = str(row["answer1"])
                             item_data["answer2"] = str(row["answer2"])
                             item_data["answer3"] = str(row["answer3"])
@@ -786,7 +793,7 @@ def import_items(request, activity_id):
                         # Handle flash card (card) items
                         else:
                             item_data["question"] = str(row["question"])
-                            item_data["number_answers"] = 1
+                            item_data["number_answers"] = 1  # Already set to 1
                             if pd.notna(row["answer"]):
                                 item_data["answer"] = str(row["answer"]).strip()
 

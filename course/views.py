@@ -278,9 +278,10 @@ def revision_view(request, course_id):
             "item__answer2",
             "item__answer3",
             "item__answer4",
+            "item__number_answers",
             "item__image",
             "item__audio",
-            "item__audio_play",  # Added for audio_play support
+            "item__audio_play",
             "successes",
             "is_master",
             "next_1",
@@ -314,9 +315,10 @@ def revision_view(request, course_id):
                 "item__answer2",
                 "item__answer3",
                 "item__answer4",
+                "item__number_answers",
                 "item__image",
                 "item__audio",
-                "item__audio_play",  # Added for audio_play support
+                "item__audio_play",
                 "successes",
                 "is_master",
                 "next_1",
@@ -336,6 +338,31 @@ def revision_view(request, course_id):
     )
     course.revision_items = []
     for item in items:
+        # Collect answer options
+        options = []
+        if item["item__item_type"] == "blank":
+            # Only include non-empty answers from answer1 to answer4
+            answers = [
+                ans for ans in [
+                    item["item__answer1"],
+                    item["item__answer2"],
+                    item["item__answer3"],
+                    item["item__answer4"]
+                ] if ans and ans.strip()
+            ]
+            options = answers
+            shuffle(options)  # Shuffle only the correct answers
+        elif item["item__item_type"] == "card":
+            # For flash cards, include the correct answer plus distractors
+            wrong_answers = list(set(all_answers) - {item["item__answer"]})
+            wrong_answers = (
+                wrong_answers[:3]
+                if len(wrong_answers) >= 3
+                else wrong_answers + ["Option " + str(i) for i in range(1, 4 - len(wrong_answers) + 1)]
+            )
+            options = [item["item__answer"]] + wrong_answers
+            shuffle(options)
+
         item_data = {
             "id": item["id"],
             "item_id": item["item__id"],
@@ -346,26 +373,16 @@ def revision_view(request, course_id):
             "answer2": item["item__answer2"],
             "answer3": item["item__answer3"],
             "answer4": item["item__answer4"],
-            "audio_play": item["item__audio_play"],  # Added for audio_play support
+            "number_answers": item["item__number_answers"] or 1,
+            "audio_play": item["item__audio_play"],
             "successes": item["successes"],
             "is_master": item["is_master"],
             "next_1": item["next_1"],
             "next_2": item["next_2"],
             "revise_at": (item["revise_at"].isoformat() if item["revise_at"] else None),
             "continue_revision": item["continue_revision"],
+            "options": options,
         }
-        # Generate three alternative wrong answers for flash cards
-        if item["item__item_type"] == "card":
-            wrong_answers = list(set(all_answers) - {item["item__answer"]})
-            wrong_answers = (
-                wrong_answers[:3]
-                if len(wrong_answers) >= 3
-                else wrong_answers
-                + ["Option " + str(i) for i in range(1, 4 - len(wrong_answers) + 1)]
-            )
-            item_data["wrong_answers"] = wrong_answers
-        else:
-            item_data["wrong_answers"] = []
         # Handle image and audio files
         if item["item__image"]:
             try:
@@ -378,12 +395,12 @@ def revision_view(request, course_id):
             except (Item.DoesNotExist, ValueError):
                 item_data["audio"] = None
         course.revision_items.append(item_data)
+
     context = {
         "courses": revision_courses,
         "first_course": course,
     }
     return render(request, "course/revision.html", context)
-
 
 @login_required
 @require_POST

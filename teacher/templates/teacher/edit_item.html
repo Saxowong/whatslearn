@@ -33,7 +33,7 @@
                 {% if error %}
                 <div class="alert alert-danger mb-3">{{ error }}</div>
                 {% endif %}
-                <input type="hidden" name="number_answers" id="id_number_answers" value="{{ form.number_answers.value|default_if_none:'0' }}">
+                <input type="hidden" name="number_answers" id="id_number_answers" value="{{ form.number_answers.value|default_if_none:'1' }}">
                 <div class="row">
                     <div class="col-md-5 mb-3">
                         <label for="id_title" class="form-label">Item Title</label>
@@ -76,7 +76,7 @@
                         </div>
                         <div id="number-answers-field" class="hidden">
                             <label for="id_number_answers_display" class="form-label">Number of Blanks</label>
-                            <input type="number" id="id_number_answers_display" class="form-control" readonly value="{{ form.number_answers.value|default_if_none:'0' }}">
+                            <input type="number" id="id_number_answers_display" class="form-control" readonly value="{{ form.number_answers.value|default_if_none:'1' }}">
                         </div>
                     </div>
                 </div>
@@ -242,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
             dropzone.addFile(file);
         }
     });
-    // Dynamic field visibility and number_answers calculation
+    // Dynamic field visibility and number_answers calculation for blank items
     var itemTypeSelect = document.getElementById('id_item_type');
     var questionInput = document.getElementById('id_question');
     var numberAnswersInput = document.getElementById('id_number_answers');
@@ -258,36 +258,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var audioField = document.getElementById('id_audio');
     var audioPlayField = document.getElementById('audio-play-field');
     var hasAudio = {% if item.audio %}true{% else %}false{% endif %};
-    function updateNumberAnswers() {
-        if (itemTypeSelect.value === 'blank') {
-            var questionText = questionInput.value || '';
-            // Replace sequences of 3 or more underscores with exactly 4 underscores
-            var normalizedText = questionText.replace(/_{3,}/g, '____');
-            if (questionText !== normalizedText) {
-                questionInput.value = normalizedText;
-            }
-            // Count sequences of 4 underscores (after normalization)
-            var underscoreCount = (normalizedText.match(/____/g) || []).length;
-            var numAnswers = Math.min(underscoreCount, 4); // Limit to 4 answers
-            numberAnswersInput.value = numAnswers;
-            numberAnswersDisplay.value = numAnswers;
-            numberAnswersField.classList.remove('hidden');
-            answerField.classList.add('hidden');
-            blankCountFeedback.textContent = underscoreCount > 0
-                ? `Detected ${underscoreCount} blank(s) (3 or more underscores normalized to ____). Number of answers set to ${numAnswers}.`
-                : 'No blanks detected. Use 3 or more underscores (e.g., ___) for each blank.';
-            updateAnswerFields(numAnswers);
-        } else {
-            numberAnswersInput.value = 0;
-            numberAnswersDisplay.value = 0;
-            numberAnswersField.classList.add('hidden');
-            blankCountFeedback.textContent = '';
-            updateAnswerFields(0);
-        }
-    }
-    function updateAnswerFields(numAnswers) {
+    function updateFields() {
+        var itemType = itemTypeSelect.value;
         // Reset visibility and required attributes
         answerField.classList.add('hidden');
+        numberAnswersField.classList.add('hidden');
         answer1Field.classList.add('hidden');
         answer2Field.classList.add('hidden');
         answer3Field.classList.add('hidden');
@@ -297,8 +272,10 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('id_answer2').required = false;
         document.getElementById('id_answer3').required = false;
         document.getElementById('id_answer4').required = false;
-        var itemType = itemTypeSelect.value;
+        blankCountFeedback.textContent = '';
         if (itemType === 'card' || itemType === 'mc') {
+            numberAnswersInput.value = 1; // Set number_answers to 1 for card and mc
+            numberAnswersDisplay.value = 1;
             answerField.classList.remove('hidden');
             dynamicField.classList.remove('hidden');
             document.getElementById('id_answer').required = true;
@@ -318,11 +295,29 @@ document.addEventListener('DOMContentLoaded', function() {
             answer2Field.classList.remove('hidden');
             answer3Field.classList.remove('hidden');
             answer4Field.classList.remove('hidden');
+            // Normalize underscores for blank items
+            var questionText = questionInput.value || '';
+            var normalizedText = questionText.replace(/_{3,}/g, '____');
+            if (questionText !== normalizedText) {
+                questionInput.value = normalizedText;
+            }
+            // Count sequences of 4 underscores (after normalization)
+            var underscoreCount = (normalizedText.match(/____/g) || []).length;
+            var numAnswers = Math.max(1, underscoreCount); // Ensure at least 1
+            numberAnswersInput.value = numAnswers;
+            numberAnswersDisplay.value = numAnswers;
+            numberAnswersField.classList.remove('hidden');
+            blankCountFeedback.textContent = underscoreCount > 0
+                ? `Detected ${underscoreCount} blank(s) (3 or more underscores normalized to ____). Number of answers set to ${numAnswers}.`
+                : 'No blanks detected. Use 3 or more underscores (e.g., ___) for each blank. Number of answers set to 1.';
+            // Set required attributes based on number of blanks
             document.getElementById('id_answer1').required = numAnswers >= 1;
             document.getElementById('id_answer2').required = numAnswers >= 2;
             document.getElementById('id_answer3').required = numAnswers >= 3;
             document.getElementById('id_answer4').required = numAnswers >= 4;
         } else {
+            numberAnswersInput.value = 1; // Default to 1 for unknown types
+            numberAnswersDisplay.value = 1;
             dynamicField.classList.add('hidden');
         }
         updateAudioPlayRequirement();
@@ -333,12 +328,11 @@ document.addEventListener('DOMContentLoaded', function() {
         audioPlayInput.required = isRequired;
     }
     // Initialize fields based on current item_type and question
-    updateNumberAnswers();
-    itemTypeSelect.addEventListener('change', updateNumberAnswers);
-    questionInput.addEventListener('input', updateNumberAnswers);
+    updateFields();
+    itemTypeSelect.addEventListener('change', updateFields);
+    questionInput.addEventListener('input', updateFields);
     questionInput.addEventListener('paste', function() {
-        // Delay to allow pasted text to be processed
-        setTimeout(updateNumberAnswers, 0);
+        setTimeout(updateFields, 0);
     });
 });
 </script>
