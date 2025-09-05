@@ -214,6 +214,7 @@ def available_courses_view(request):
     context = {"courses": unenrolled_courses}
     return render(request, "course/available_courses.html", context)
 
+
 @login_required
 def revision_view(request, course_id):
     user = request.user.profile
@@ -282,6 +283,7 @@ def revision_view(request, course_id):
             "item__image",
             "item__audio",
             "item__audio_play",
+            "item__activity_id",
             "successes",
             "is_master",
             "next_1",
@@ -319,6 +321,7 @@ def revision_view(request, course_id):
                 "item__image",
                 "item__audio",
                 "item__audio_play",
+                "item__activity_id",
                 "successes",
                 "is_master",
                 "next_1",
@@ -329,17 +332,13 @@ def revision_view(request, course_id):
             .order_by("successes", "id")[:remaining_count]
         )
         items.extend(additional_items)
-    # Get all possible answers for generating alternatives for flash cards
-    all_answers = (
-        Item.objects.filter(activity__lesson__course=course)
-        .exclude(answer__isnull=True)
-        .values_list("answer", flat=True)
-        .distinct()
-    )
+    
     course.revision_items = []
     for item in items:
         # Collect answer options
         options = []
+        correct_answer = None
+        correct_sequence = []
         if item["item__item_type"] == "blank":
             # Only include non-empty answers from answer1 to answer4
             answers = [
@@ -351,16 +350,45 @@ def revision_view(request, course_id):
                 ] if ans and ans.strip()
             ]
             options = answers
-            shuffle(options)  # Shuffle only the correct answers
+            correct_answer = item["item__answer1"] or ""  # Fallback for blank items
+            correct_sequence = answers  # Sequence for fill-in-the-blank
+            shuffle(options)
         elif item["item__item_type"] == "card":
-            # For flash cards, include the correct answer plus distractors
-            wrong_answers = list(set(all_answers) - {item["item__answer"]})
+            # For flash cards, include the correct answer plus distractors from the same activity
+            activity_id = item["item__activity_id"]
+            wrong_answers = (
+                Item.objects.filter(
+                    activity_id=activity_id,
+                    item_type="card"
+                )
+                .exclude(id=item["item__id"])
+                .exclude(answer__isnull=True)
+                .values_list("answer", flat=True)
+                .distinct()
+            )
+            wrong_answers = list(wrong_answers)
             wrong_answers = (
                 wrong_answers[:3]
                 if len(wrong_answers) >= 3
                 else wrong_answers + ["Option " + str(i) for i in range(1, 4 - len(wrong_answers) + 1)]
             )
             options = [item["item__answer"]] + wrong_answers
+            correct_answer = item["item__answer"] or ""
+            correct_sequence = [correct_answer]
+            shuffle(options)
+        elif item["item__item_type"] == "mc":
+            # For multiple-choice, include answer1 to answer4
+            answers = [
+                ans for ans in [
+                    item["item__answer1"],
+                    item["item__answer2"],
+                    item["item__answer3"],
+                    item["item__answer4"]
+                ] if ans and ans.strip()
+            ]
+            options = answers
+            correct_answer = item["item__answer"] or ""  # Use item__answer as the correct answer
+            correct_sequence = [correct_answer]
             shuffle(options)
 
         item_data = {
@@ -382,6 +410,8 @@ def revision_view(request, course_id):
             "revise_at": (item["revise_at"].isoformat() if item["revise_at"] else None),
             "continue_revision": item["continue_revision"],
             "options": options,
+            "correct_answer": correct_answer,
+            "correct_sequence_json": json.dumps(correct_sequence),
         }
         # Handle image and audio files
         if item["item__image"]:
