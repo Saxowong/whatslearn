@@ -1,158 +1,151 @@
 {% extends "course/activity_detail.html" %}
-
 {% block activity_content %}
-
     <div class="html-content">
         <div class="pdf-viewer-controls mb-3">
             <button id="prevPageBtn" class="btn btn-primary btn-sm me-2" disabled>
-                <i class="bi bi-arrow-left"></i> Previous
+                <i class="bi bi-arrow-left"></i>
+                <span class="pdf-btn-text">Previous</span>
             </button>
             <button id="nextPageBtn" class="btn btn-primary btn-sm me-2">
-                <i class="bi bi-arrow-right"></i> Next
+                <i class="bi bi-arrow-right"></i>
+                <span class="pdf-btn-text">Next</span>
             </button>
             <span id="pageInfo" class="text-muted me-2">Page 1 of 1</span>
             <button id="fullscreenBtn" class="btn btn-primary btn-sm me-2">
-                <i class="bi bi-arrows-fullscreen"></i> Full Screen
+                <i class="bi bi-arrows-fullscreen"></i>
+                <span class="pdf-btn-text">Full Screen</span>
             </button>
             <a href="{{ activity.pdf_file.url }}" download class="btn btn-primary btn-sm">
-                <i class="bi bi-download"></i> Download
+                <i class="bi bi-download"></i>
+                <span class="pdf-btn-text">Download</span>
             </a>
         </div>
         <div id="pdfViewerContainer" style="position: relative; width: 100%; height: 600px;">
             <canvas id="pdfViewerCanvas"></canvas>
         </div>
     </div>
-
-    {% endblock %}
-
-    {% block extra_css %}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <style>
+{% endblock %}
+{% block extra_css %}
+{{ block.super }}
+<style>
+    .pdf-viewer-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    #pdfViewerContainer {
+        border: 1px solid #ddd;
+        overflow: auto;
+    }
+    #pdfViewerCanvas {
+        width: 100%;
+    }
+    @media (max-width: 576px) {
         .pdf-viewer-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            justify-content: center !important; /* Center PDF viewer controls on mobile */
+            flex-wrap: nowrap !important; /* Prevent wrapping */
         }
-        #pdfViewerContainer {
-            border: 1px solid #ddd;
-            overflow: auto;
+        .pdf-btn-text {
+            display: none !important; /* Hide text labels on mobile */
         }
-        #pdfViewerCanvas {
-            width: 100%;
+        .pdf-viewer-controls .btn {
+            padding: 0.25rem 0.5rem !important; /* Adjust padding for icon-only buttons */
         }
-    </style>
-    {% endblock %}
-    {% block extra_js %}
-    {{ block.super }}
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-    <script>
-        // Set PDF.js worker source
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
-
-        document.addEventListener('DOMContentLoaded', function() {
-            const url = '{{ activity.pdf_file.url }}';
-            const pdfViewerContainer = document.getElementById('pdfViewerContainer');
-            const canvas = document.getElementById('pdfViewerCanvas');
-            const ctx = canvas.getContext('2d');
-            const prevPageBtn = document.getElementById('prevPageBtn');
-            const nextPageBtn = document.getElementById('nextPageBtn');
-            const pageInfo = document.getElementById('pageInfo');
-
-            let pdfDoc = null;
-            let pageNum = 1;
-            let pageRendering = false;
-            let pageNumPending = null;
-            let scale = 1;
-            let totalPages = 1;
-
-            // Load PDF
-            pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
-                pdfDoc = pdfDoc_;
-                totalPages = pdfDoc.numPages;
+    }
+</style>
+{% endblock %}
+{% block extra_js %}
+{{ block.super }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+<script>
+    // Set PDF.js worker source
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+    document.addEventListener('DOMContentLoaded', function() {
+        const url = '{{ activity.pdf_file.url }}';
+        const pdfViewerContainer = document.getElementById('pdfViewerContainer');
+        const canvas = document.getElementById('pdfViewerCanvas');
+        const ctx = canvas.getContext('2d');
+        const prevPageBtn = document.getElementById('prevPageBtn');
+        const nextPageBtn = document.getElementById('nextPageBtn');
+        const pageInfo = document.getElementById('pageInfo');
+        let pdfDoc = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+        let scale = 1;
+        let totalPages = 1;
+        // Load PDF
+        pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
+            pdfDoc = pdfDoc_;
+            totalPages = pdfDoc.numPages;
+            updatePageInfo();
+            updateButtonStates();
+            renderPage(pageNum);
+        }).catch(function(error) {
+            console.error('Error loading PDF:', error);
+            pdfViewerContainer.innerHTML = '<p>Error loading PDF. Please try downloading it.</p>';
+        });
+        // Render a page
+        function renderPage(num) {
+            pageRendering = true;
+            pdfDoc.getPage(num).then(function(page) {
+                const viewport = page.getViewport({ scale: scale });
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+                page.render(renderContext).promise.then(function() {
+                    pageRendering = false;
+                    if (pageNumPending !== null) {
+                        renderPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+                });
                 updatePageInfo();
                 updateButtonStates();
+            });
+        }
+        // Update page info
+        function updatePageInfo() {
+            pageInfo.textContent = `Page ${pageNum} of ${totalPages}`;
+        }
+        // Update button states
+        function updateButtonStates() {
+            prevPageBtn.disabled = pageNum <= 1;
+            nextPageBtn.disabled = pageNum >= totalPages;
+        }
+        // Previous page
+        prevPageBtn.addEventListener('click', function() {
+            if (pageNum <= 1) return;
+            pageNum--;
+            if (pageRendering) {
+                pageNumPending = pageNum;
+            } else {
                 renderPage(pageNum);
-            }).catch(function(error) {
-                console.error('Error loading PDF:', error);
-                pdfViewerContainer.innerHTML = '<p>Error loading PDF. Please try downloading it.</p>';
-            });
-
-            // Render a page
-            function renderPage(num) {
-                pageRendering = true;
-                pdfDoc.getPage(num).then(function(page) {
-                    const viewport = page.getViewport({ scale: scale });
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-
-                    const renderContext = {
-                        canvasContext: ctx,
-                        viewport: viewport
-                    };
-                    page.render(renderContext).promise.then(function() {
-                        pageRendering = false;
-                        if (pageNumPending !== null) {
-                            renderPage(pageNumPending);
-                            pageNumPending = null;
-                        }
-                    });
-                    updatePageInfo();
-                    updateButtonStates();
-                });
             }
-
-            // Update page info
-            function updatePageInfo() {
-                pageInfo.textContent = `Page ${pageNum} of ${totalPages}`;
-            }
-
-            // Update button states
-            function updateButtonStates() {
-                prevPageBtn.disabled = pageNum <= 1;
-                nextPageBtn.disabled = pageNum >= totalPages;
-            }
-
-            // Previous page
-            prevPageBtn.addEventListener('click', function() {
-                if (pageNum <= 1) return;
-                pageNum--;
-                if (pageRendering) {
-                    pageNumPending = pageNum;
-                } else {
-                    renderPage(pageNum);
-                }
-            });
-
-            // Next page
-            nextPageBtn.addEventListener('click', function() {
-                if (pageNum >= totalPages) return;
-                pageNum++;
-                if (pageRendering) {
-                    pageNumPending = pageNum;
-                } else {
-                    renderPage(pageNum);
-                }
-            });
-
-            // Full-screen button
-            document.getElementById('fullscreenBtn').addEventListener('click', function() {
-                if (pdfViewerContainer.requestFullscreen) {
-                    pdfViewerContainer.requestFullscreen();
-                } else if (pdfViewerContainer.mozRequestFullScreen) {
-                    pdfViewerContainer.mozRequestFullScreen();
-                } else if (pdfViewerContainer.webkitRequestFullscreen) {
-                    pdfViewerContainer.webkitRequestFullscreen();
-                } else if (pdfViewerContainer.msRequestFullscreen) {
-                    pdfViewerContainer.msRequestFullscreen();
-                }
-            });
-
-            // Adjust canvas size on window resize
-            window.addEventListener('resize', function() {
-                if (pdfDoc) {
-                    renderPage(pageNum);
-                }
-            });
         });
-    </script>
-    {% endblock %}
+        // Next page
+        nextPageBtn.addEventListener('click', function() {
+            if (pageNum >= totalPages) return;
+            pageNum++;
+            if (pageRendering) {
+                pageNumPending = pageNum;
+            } else {
+                renderPage(pageNum);
+            }
+        });
+        // Full-screen button
+        document.getElementById('fullscreenBtn').addEventListener('click', function() {
+            window.open(url, '_blank');
+        });
+        // Adjust canvas size on window resize
+        window.addEventListener('resize', function() {
+            if (pdfDoc) {
+                renderPage(pageNum);
+            }
+        });
+    });
+</script>
+{% endblock %}

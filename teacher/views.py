@@ -1,8 +1,9 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Max
+from django.db.models import Count, Max, Q
 from django.db import transaction, models
-from course.models import Course, Category, Lesson, Activity, Item
+import course
+from course.models import Course, Category, Lesson, Activity, Item, StudentCourse
 from django.contrib import messages
 from user.models import Profile
 from django.urls import reverse
@@ -23,24 +24,52 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def manage_courses(request):
-    # Fetch courses with related teacher, category, and lessons, annotated with lesson count
     courses = (
         Course.objects.filter(teacher__user=request.user)
-        .select_related("teacher", "category")
-        .prefetch_related("lessons")
-        .annotate(lesson_count=Count("lessons"))
+        .select_related("teacher__user", "category")  # Only for fields used in template
+        .annotate(
+            lesson_count=Count("lessons", distinct=True),  # Use distinct to avoid join inflation
+            enrollment_count=Count("student_courses", distinct=True)
+        )
     )
-    # Debug: Print course data to verify lesson count
-    # for course in courses:
-    #     # Additional debug: List lesson titles for this course
-    #     lesson_titles = [lesson.title for lesson in course.lessons.all()]
-    #     print(f"Lessons for Course {course.id}: {lesson_titles}")
+    # Debug: Log counts for verification
+    for course in courses:
+        print(f"Course: {course.title}, Lessons: {course.lesson_count}, Raw Lessons: {course.lessons.count()}, "
+              f"Enrollments: {course.enrollment_count}, Raw Enrollments: {course.student_courses.count()}")
     context = {
         "courses": courses,
-        "categories": Category.objects.all(),  # For drawer form
+        "categories": Category.objects.all(),
     }
     return render(request, "teacher/manage_courses.html", context)
 
+@login_required
+def manage_learners(request, course_id):
+    # Fetch the course, ensuring it belongs to the teacher
+    course = get_object_or_404(
+        Course.objects.select_related("teacher", "category"),
+        id=course_id,
+        teacher__user=request.user
+    )
+    # Fetch enrolled students with annotations for course count and activities completed
+    students = (
+        StudentCourse.objects.filter(course=course)
+        .select_related("student__user")
+        .annotate(
+            course_count=Count("student__student_courses__course", distinct=True),
+            activities_completed=Count(
+                "student__student_activities",
+                filter=Q(
+                    student__student_activities__completed=True,
+                    student__student_activities__activity__lesson__course__id=course.id
+                )
+            )
+        )
+    )
+    context = {
+        "course": course,
+        "students": students,
+    }
+    return render(request, "teacher/manage_learners.html", context)
 
 @login_required
 def edit_course(request, course_id=0):

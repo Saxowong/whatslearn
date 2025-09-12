@@ -5,6 +5,7 @@ from . import views  # Import from courses app since teacher_courses is there
 app_name = "teacher"
 
 urlpatterns = [
+    path('course/<int:course_id>/learners/', views.manage_learners, name="manage_learners"),
     path("courses", views.manage_courses, name="manage_courses"),
     path("edit-course/<int:course_id>", views.edit_course, name="edit_course"),
     path("delete-course/<int:course_id>", views.delete_course, name="delete_course"),

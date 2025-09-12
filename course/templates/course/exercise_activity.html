@@ -18,11 +18,11 @@
             <div id="welcomeBlock" class="text-center welcome-block p-4 mb-2 rounded">
                 <!-- Progress Bar Section -->
                 <div class="activity-description mb-5 text-start">
-                    {% if activity.html_content %}
+                    {% comment %} {% if activity.html_content %}
                     <div class="activity-description-content mb-3">
                         {{ activity.html_content|safe }}
                     </div>
-                    {% endif %}
+                    {% endif %} {% endcomment %}
                     <p>This exercise has {{ activity.items.count }} question{{ activity.items.count|pluralize }}.</p>
                 </div>
                 <div class="progress-container mb-5">
@@ -62,8 +62,7 @@
                          data-item-number-answers="{{ item.number_answers|default:1 }}"
                          data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
                          data-item-audioplay="{{ item.audio_play|default:'start' }}"
-                         data-item-correct-answer="{{ item.correct_answer|default:'' }}"
-                         style="min-height: 60vh;">
+                         data-item-correct-answer="{{ item.correct_answer|default:'' }}">
                         <div class="question-content mb-2 position-relative">
                             <center><h4 class="feedback-result d-none mb-3"></h4></center>
                             <div class="question-text fs-5 mb-2">
@@ -153,16 +152,15 @@
     text-decoration: underline;
 }
 .welcome-block {
-    max-width: 800px;
     margin: 0 auto;
-    min-height: 50vh;
+    min-height: 300px;
     border: 1px solid var(--bs-card-border-color);
 }
 .activity-description-content {
     margin-bottom: 1rem;
 }
 .question-card {
-    min-height: 250px;
+    min-height: 300px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -183,7 +181,7 @@
 .answer-buttons button {
     white-space: normal;
     height: 100%;
-    min-height: 60px;
+    min-height: 40px;
 }
 .correct-answer {
     background-color: #d4edda !important;

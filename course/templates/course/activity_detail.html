@@ -7,28 +7,28 @@
                 <a href="{% url 'student_courses' %}">My Courses</a>
             </li>
             <li class="breadcrumb-item">
-                <a href="{% url 'course:course' course_id %}">{{ activity.lesson.course.title }}</a>
-            </li>
-            <li class="breadcrumb-item active" aria-current="page">
-                <span>{{ activity.title }}</span>
+                <a href="{% url 'course:course' course_id %}">{{ activity.lesson.course.title }}</a> /
             </li>
         </ol>
     </nav>
 </div>
 <div class="container mt-4">
-    <div class="title-row mb-4 d-flex align-items-center justify-content-between">
-        <h2 class="mb-0">{{ activity.title }}</h2>
-        <div class="nav-buttons mt-2">
+    <!-- Title and Nav Buttons -->
+    <div class="row g-0 mb-4 d-flex justify-content-between align-items-center">
+        <div class="col-12 col-md-auto mb-2 mb-md-0">
+            <h2 class="mb-0 activity-title">{{ activity.title }}</h2>
+        </div>
+        <div class="col-12 col-md-auto nav-buttons ms-auto">
             {% if previous_activity %}
-            <a href="{% url 'course:activity_detail' previous_activity.id %}" class="btn btn-outline-primary me-2">
+            <a href="{% url 'course:activity_detail' previous_activity.id %}" class="btn btn-outline-primary me-2 previous-btn">
                 <i class="bi bi-chevron-left"></i> Previous
             </a>
             {% endif %}
-            <a href="{% url 'course:course' course_id %}" class="btn btn-outline-secondary me-2">
+            <a href="{% url 'course:course' course_id %}" class="btn btn-outline-secondary contents-btn">
                 <i class="bi bi-list"></i> Contents
             </a>
             {% if next_activity %}
-            <a href="{% url 'course:activity_detail' next_activity.id %}" class="btn btn-outline-primary">
+            <a href="{% url 'course:activity_detail' next_activity.id %}" class="btn btn-outline-primary next-btn">
                 Next <i class="bi bi-chevron-right"></i>
             </a>
             {% endif %}
@@ -116,6 +116,7 @@
 .nav-buttons {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
 }
 .nav-buttons .btn {
     font-size: 0.9rem;
@@ -143,16 +144,40 @@
     display: none;
     max-width: 300px;
 }
+@media (max-width: 576px) {
+    h2.activity-title {
+        font-size: 1.2rem !important; /* Smaller font for mobile */
+        color: #198754 !important; /* Bootstrap text-success color */
+        font-weight: bold !important; /* Bold title */
+    }
+    .nav-buttons {
+        margin-top: 0.5rem; /* Space between title and buttons in mobile */
+        display: flex !important; /* Ensure flex display */
+        justify-content: center !important; /* Center buttons on mobile */
+        align-items: center !important; /* Vertically center */
+        gap: 0.5rem !important; /* Space between buttons */
+        flex-wrap: nowrap !important; /* Prevent wrapping */
+        width: 100% !important; /* Ensure full width for centering */
+        text-align: center !important; /* Fallback for non-flex contexts */
+    }
+    .contents-btn {
+        order: 0 !important; /* Ensure Contents button is centered */
+    }
+    .previous-btn {
+        order: -1 !important; /* Place Previous button to the left */
+    }
+    .next-btn {
+        order: 1 !important; /* Place Next button to the right */
+    }
+}
 </style>
 {% endblock %}
 {% block extra_js %}
 <script>
 // Debug script execution
 console.log('activity_detail.html script loaded');
-
 // Log cookies to debug __Secure-YEC
 console.log('Cookies:', document.cookie);
-
 // Simplified error alert function
 function showErrorAlert(message) {
     let alertDiv = document.getElementById('error-alert');
@@ -160,7 +185,6 @@ function showErrorAlert(message) {
     alertDiv.style.display = 'block';
     setTimeout(() => alertDiv.style.display = 'none', 3000);
 }
-
 // Log checkboxes to verify detection
 console.log('Found checkboxes:', document.querySelectorAll('.activity-checkbox').length);
 document.querySelectorAll('.activity-checkbox').forEach(checkbox => {
@@ -171,7 +195,6 @@ document.querySelectorAll('.activity-checkbox').forEach(checkbox => {
         checked: checkbox.checked
     });
 });
-
 // Activity completion handling
 document.addEventListener('change', function(event) {
     if (!event.target.matches('.activity-checkbox')) return;
@@ -180,25 +203,20 @@ document.addEventListener('change', function(event) {
     const activityTitle = checkbox.dataset.activityTitle;
     const isCompleted = checkbox.checked;
     console.log('Checkbox changed:', { activityId, activityTitle, isCompleted });
-
     // Handle non-exercise activities only (video, PDF, HTML)
     if (!checkbox.closest('.list-group-item').querySelector('.progress')) {
         const url = '{% url "course:submit_activity" 0 %}'.replace('0', activityId);
         console.log('Sending AJAX to:', url, { activityId, activityTitle, isCompleted });
-
         // Show loading state
         checkbox.disabled = true;
         checkbox.classList.add('loading');
-
         // AJAX request
         const xhr = new XMLHttpRequest();
         xhr.open('POST', url, true);
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-
         const data = `is_completed=${isCompleted}&csrfmiddlewaretoken={{ csrf_token }}`;
         console.log('AJAX data:', data);
-
         xhr.onload = function() {
             checkbox.disabled = false;
             checkbox.classList.remove('loading');
@@ -221,9 +239,6 @@ document.addEventListener('change', function(event) {
                     // Trust database update and keep checkbox state
                     checkbox.setAttribute('aria-label', `Mark ${activityTitle} as ${isCompleted ? 'completed' : 'incomplete'}`);
                     checkbox.closest('.list-group-item').classList.toggle('text-success', isCompleted);
-                    // showErrorAlert('Server returned HTML, but update may have succeeded. Please refresh.');
-                    // Optional: Redirect to course.html to refresh UI
-                    // window.location.href = '{% url "course:course" course_id %}';
                 }
             } else {
                 console.error('AJAX error:', { status: xhr.status, responseText: xhr.responseText.substring(0, 200) });
@@ -231,7 +246,6 @@ document.addEventListener('change', function(event) {
                 showErrorAlert('Failed to update activity: Server error (status ' + xhr.status + ').');
             }
         };
-
         xhr.onerror = function() {
             console.error('AJAX network error for activity:', { activityId, activityTitle });
             checkbox.checked = !isCompleted;
@@ -239,7 +253,6 @@ document.addEventListener('change', function(event) {
             checkbox.classList.remove('loading');
             showErrorAlert('Failed to update activity: Network error.');
         };
-
         xhr.send(data);
     } else {
         console.log('Skipping AJAX for exercise activity:', { activityId, activityTitle });

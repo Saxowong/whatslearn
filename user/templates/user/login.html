@@ -1,37 +1,110 @@
-{% extends 'user/base.html' %} {% block content %}
-<div class="container">
-  <div class="row mb-2 mt-3">
-    <div class="col-md-4 offset-md-4">
-      <div id="login_widget" class="card">
-        <div class="card-header">
-          <div class="card-title">
-            <h3>Login</h3>
+{% extends 'user/base.html' %}
+{% block content %}
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+  .background-image {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    object-fit: cover;
+    opacity: 0.5;
+    z-index: -1;
+  }
+  .drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    width: 100%;
+    max-width: 400px;
+    background-color: rgba(255, 255, 255, 0.95);
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+    transform: translateX(100%);
+    animation: slideIn 0.5s ease-out forwards;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  .card {
+    width: 100%;
+    max-width: 350px;
+    margin: 0 auto;
+    border: none; /* Remove card border */
+    background-color: transparent; /* Ensure card background is transparent */
+  }
+  .card-header {
+    background-color: transparent; /* Transparent header */
+    border: none; /* Remove header border */
+    padding: 0; /* Remove default padding for cleaner look */
+    text-align: center; /* Center-align the header content */
+  }
+  .card-title h3 {
+    color: green;
+    font-weight: bold;
+    font-size: 1.5rem; /* Smaller title for desktop */
+    margin: 0.5rem 0;
+  }
+  @media (max-width: 576px) {
+    .drawer {
+      max-width: 100%;
+    }
+    .card {
+      max-width: 300px; /* Slightly smaller card for mobile */
+    }
+    .card-title h3 {
+      font-size: 1.25rem; /* Smaller title for mobile */
+    }
+  }
+</style>
+<div class="container-fluid p-0">
+  <!-- Background image -->
+  <img src="/background.jpg" alt="Background Image" class="background-image">
+  <!-- Drawer with login form -->
+  <div class="drawer">
+    <div id="login_widget" class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <h3>Login</h3>
+        </div>
+      </div>
+      <div class="card-body pt-3 pb-3 ps-5 pe-5">
+        <form method="POST" class="login-form">
+          {% csrf_token %}
+          {% for field in form %}
+          <div class="form-group mb-3">
+            <label for="{{ field.id_for_label }}" class="form-label">
+              {{ field.label }}
+            </label>
+            <div class="input-group">
+              {{ field }}
+            </div>
+            {% if field.errors %}
+            <div class="text-danger small mt-1">
+              {{ field.errors }}
+            </div>
+            {% endif %}
           </div>
-        </div>
-        <div class="card-body d-flex justify-content-center pt-3 pb-3 ps-5 pe-5">
-          <form method="POST" class="login-form">
-            {% csrf_token %}
-            {% for field in form %}
-            <div class="form-group mb-3">
-              <label for="{{ field.id_for_label }}" class="form-label">
-                {{ field.label }}
-              </label>
-              <div class="input-group">
-                {{ field }}
-              </div>
-              {% if field.errors %}
-              <div class="text-danger small mt-1">
-                {{ field.errors }}
-              </div>
-              {% endif %}
-            </div>
-            {% endfor %}
-            <div class="d-grid gap-1">
-              <button class="btn btn-primary" type="submit">Login</button>
-              <Label>Don't have account? <a href="/register">Please sign-up.</a></label>
-            </div>
-          </form>
-        </div>
+          {% endfor %}
+          <div class="d-grid gap-1">
+            <button class="btn btn-primary" type="submit">Login</button>
+            <label>Don't have an account? <a href="/register">Please sign-up.</a></label>
+          </div>
+        </form>
       </div>
     </div>
   </div>

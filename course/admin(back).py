@@ -5,7 +5,6 @@ from django.utils.html import format_html
 from django.utils import timezone
 from django.shortcuts import redirect
 from urllib.parse import parse_qs
-
 from .models import (
     Course,
     Lesson,
@@ -17,35 +16,16 @@ from .models import (
     StudentItem,
 )
 
+
+# Custom form for Activity to handle video_embed_code and pdf_file
 class ActivityForm(forms.ModelForm):
     class Meta:
         model = Activity
-        fields = [
-            'title',
-            'lesson',
-            'activity_type',
-            'order',
-            'html_content',
-            'video_embed_code',
-            'script',
-            'audio_file',
-            'pdf_file',
-        ]
+        fields = "__all__"
         widgets = {
-            'title': forms.TextInput(attrs={'class': 'form-control'}),
-            'lesson': forms.Select(attrs={'class': 'form-select'}),
-            'activity_type': forms.Select(attrs={'class': 'form-select'}),
-            'order': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
-            'html_content': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
-            'video_embed_code': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
-            'script': forms.Textarea(attrs={
-                'rows': 5,
-                'cols': 40,
-                'class': 'form-control',
-                'placeholder': '[{"order": "1", "time": "00:00", "script": "what is your name"}, {"order": "2", "time": "00:05", "script": "my name is John"}]'
-            }),
-            'audio_file': forms.FileInput(attrs={'class': 'form-control'}),
-            'pdf_file': forms.FileInput(attrs={'class': 'form-control'}),
+            "video_embed_code": forms.Textarea(attrs={"rows": 4}),
+            "html_content": forms.Textarea(attrs={"rows": 4}),
+            "pdf_file": forms.FileInput(),
         }
 
     def clean(self):
@@ -54,66 +34,21 @@ class ActivityForm(forms.ModelForm):
         pdf_file = cleaned_data.get("pdf_file")
         video_embed_code = cleaned_data.get("video_embed_code")
         html_content = cleaned_data.get("html_content")
-        audio_file = cleaned_data.get("audio_file")
-        script = cleaned_data.get("script")
-        title = cleaned_data.get("title")
-        lesson = cleaned_data.get("lesson")
-        order = cleaned_data.get("order")
-
-        # Validation for required fields
-        if not title:
-            self.add_error("title", "Title is required.")
-        if not lesson:
-            self.add_error("lesson", "A lesson must be selected.")
-        if order is None:
-            self.add_error("order", "Order is required.")
 
         # Validation for pdf_file
-        if activity_type == "pdf":
-            if not pdf_file and not self.instance.pdf_file:
-                self.add_error("pdf_file", "A PDF file is required for PDF activities.")
-        elif pdf_file:
+        if activity_type == "pdf" and not pdf_file and not self.instance.pdf_file:
+            self.add_error("pdf_file", "A PDF file is required for PDF activities.")
+        elif activity_type != "pdf" and pdf_file:
             self.add_error("pdf_file", "PDF file should only be uploaded for PDF activities.")
 
-        # Validation for video_embed_code
-        if activity_type == "video":
-            if not video_embed_code:
-                self.add_error("video_embed_code", "Video embed code is required for Video activities.")
-            # Optional: Recommend audio_file for video activities
-            if not audio_file and not self.instance.audio_file:
-                self.add_error("audio_file", "An audio file is recommended for Video activities with transcripts.")
-
-        # Validation for html_content
-        if activity_type == "html" and not html_content:
+        # Validation for other fields
+        if activity_type == "video" and not video_embed_code:
+            self.add_error("video_embed_code", "Video embed code is required for Video activities.")
+        elif activity_type == "html" and not html_content:
             self.add_error("html_content", "HTML content is required for Content activities.")
 
-        # Validation for script (JSON field)
-        if script:
-            try:
-                # Ensure script is a valid JSON list
-                if isinstance(script, str):
-                    script = json.loads(script)  # Convert string to JSON if entered via Textarea
-                if not isinstance(script, list):
-                    raise ValidationError("Script must be a JSON array.")
-                # Check for unique orders
-                orders = [item['order'] for item in script if 'order' in item]
-                if len(orders) != len(set(orders)):
-                    raise ValidationError("Order values must be unique within the script array.")
-                for item in script:
-                    if not isinstance(item, dict) or 'order' not in item or 'time' not in item or 'script' not in item:
-                        raise ValidationError("Each script item must be an object with 'order', 'time', and 'script' keys.")
-                    if not re.match(r'^\d+$', str(item['order'])):
-                        raise ValidationError("Order must be a string of digits (e.g., '1', '2').")
-                    if not re.match(r'^\d{2}:\d{2}$', str(item['time'])):
-                        raise ValidationError("Time must be in MM:SS format (e.g., '00:00', '12:34').")
-                    if not isinstance(item['script'], str):
-                        raise ValidationError("Script content must be a string.")
-            except json.JSONDecodeError:
-                self.add_error("script", "Invalid JSON format. Please enter a valid JSON array.")
-            except ValidationError as e:
-                self.add_error("script", e.message)
-
         return cleaned_data
+# Inline for Lessons within Course
 class LessonInline(admin.TabularInline):
     model = Lesson
     extra = 1

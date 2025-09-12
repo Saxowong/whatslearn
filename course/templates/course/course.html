@@ -4,25 +4,28 @@
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item">
-                <a href="{% url 'student_courses' %}">My Courses</a>
+                <a href="{% url 'student_courses' %}">My Courses</a> /
             </li>
-            <li class="breadcrumb-item active" aria-current="page">
+            {% comment %} <li class="breadcrumb-item active" aria-current="page">
                 {{ course.title }}
-            </li>
+            </li> {% endcomment %}
         </ol>
     </nav>
 </div>
 <div class="container mt-4">
-    <div class="title-row">
-        <h2 class="mb-0">{{ course.title }}</h2>
-        <div class="nav-buttons mt-2">
+    <!-- Title and Nav Buttons -->
+    <div class="row g-0 mb-4 d-flex justify-content-between align-items-center">
+        <div class="col-auto">
+            <h2 class="mb-0 course-title">{{ course.title }}</h2>
+        </div>
+        {% comment %} <div class="col-auto nav-buttons">
             <form action="{% url 'course:unsubscribe_course' course.id %}" method="post" class="unsubscribe-form" id="unsubscribe-form-{{ course.id }}">
                 {% csrf_token %}
                 <button type="button" class="btn btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#unsubscribeModal-{{ course.id }}" aria-label="Unsubscribe from {{ course.title }}">
-                    <i class="bi bi-x-lg"></i> Unsubscribe
+                    <i class="bi bi-x-lg"></i><span class="d-none d-md-inline"> Unsubscribe</span>
                 </button>
             </form>
-        </div>
+        </div> {% endcomment %}
     </div>  
     <div class="row">
         <!-- Left Column - Lessons Accordion -->
@@ -133,7 +136,7 @@
             </div>
         </div>
     </div>
-    <!-- Bootstrap Modal for Unsubscribe Confirmation -->
+    {% comment %} <!-- Bootstrap Modal for Unsubscribe Confirmation -->
     <div class="modal fade" id="unsubscribeModal-{{ course.id }}" tabindex="-1" aria-labelledby="unsubscribeModalLabel-{{ course.id }}" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -147,7 +150,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </div> {% endcomment %}
 </div>
 {% endblock %}
 {% block extra_css %}
@@ -159,13 +162,13 @@
 .activity-title {
     color: #212529;
 }
-.activity-checkbox, .unsubscribe-form button {
+{% comment %} .activity-checkbox, .unsubscribe-form button {
     cursor: pointer;
 }
 .activity-checkbox:disabled, .unsubscribe-form button:disabled {
     cursor: not-allowed;
     opacity: 0.5;
-}
+} {% endcomment %}
 .progress {
     height: 16px;
     width: 30%;
@@ -193,6 +196,13 @@
     z-index: 1000;
     display: none;
     max-width: 300px;
+}
+@media (max-width: 576px) {
+    .course-title {
+        font-size: 1.2rem; /* Smaller font for mobile */
+        color: #198754; /* Bootstrap text-success color */
+        font-weight: bold; /* Bold title */
+    }
 }
 </style>
 {% endblock %}
@@ -269,7 +279,7 @@ $(document).ready(function() {
         }
     });
     // Unsubscribe handling
-    $('.confirm-unsubscribe').on('click', function() {
+    {% comment %} $('.confirm-unsubscribe').on('click', function() {
         const $button = $(this);
         const formId = $button.data('form-id');
         const $form = $('#' + formId);
@@ -298,7 +308,7 @@ $(document).ready(function() {
                 $modal.modal('hide');
             }
         });
-    });
+    }); {% endcomment %}
 });
 </script>
 {% endblock %}

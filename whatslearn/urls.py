@@ -57,6 +57,7 @@ urlpatterns = [
     path("", lambda request: redirect("student_courses"), name="home"),
     path("admin", admin.site.urls),
     path("register", views.register_view, name="register"),
+    path("dictionary/", include("dictionary.urls")),
     path("logout", logout_view, name="logout"),
     path("login", login_view, name="login"),
     path("course/", include("course.urls")),  # Updated to course.urls

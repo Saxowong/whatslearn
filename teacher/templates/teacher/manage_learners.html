@@ -1,0 +1,161 @@
+{% extends "user/base.html" %}
+{% load static %}
+{% block content %}
+<div class="container mt-5">
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% endif %} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Learners for {{ course.title }}</h2>
+        <a href="{% url 'teacher:manage_courses' %}" class="btn btn-primary">
+            <i class="bi bi-arrow-left"></i> Back to Courses
+        </a>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <table id="learnersTable" class="table table-striped" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>Create Time</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>No. of Courses</th>
+                        <th>Activities Completed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student_course in students %}
+                    <tr>
+                        <td data-order="{{ student_course.enrolled_at|date:'c' }}">{{ student_course.enrolled_at|date:"Y-m-d H:i:s" }}</td>
+                        <td>{{ student_course.student.user.username }}</td>
+                        <td>{{ student_course.student.user.email }}</td>
+                        <td>
+                            <span class="badge bg-primary rounded-pill">{{ student_course.course_count|default:0 }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-info rounded-pill">{{ student_course.activities_completed|default:0 }}</span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td>No learners enrolled</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_css %}
+<!-- DataTables CSS -->
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+<style>
+    .badge {
+        font-size: 0.9em;
+        min-width: 2.5em;
+        padding: 0.3em 0.6em;
+    }
+    th.sorting:after, th.sorting_asc:after, th.sorting_desc:after {
+        opacity: 1 !important;
+    }
+    .dataTables_wrapper .dataTables_filter input {
+        margin-left: 0.5em;
+    }
+</style>
+{% endblock %}
+{% block extra_js %}
+<!-- DataTables JS -->
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script>
+$(document).ready(function() {
+    // Initialize DataTables
+    $('#learnersTable').DataTable({
+        dom: '<"top"<"row"<"col-md-6"B><"col-md-6"f>>>rt<"bottom"<"row"<"col-md-6"i><"col-md-6"p>>>',
+        buttons: [
+            {
+                extend: 'excelHtml5',
+                className: 'btn btn-sm btn-outline-success',
+                exportOptions: { columns: [0, 1, 2, 3, 4] }
+            },
+            {
+                extend: 'pdfHtml5',
+                className: 'btn btn-sm btn-outline-danger',
+                title: 'Learners for {{ course.title|escapejs }} - {{ request.user.get_full_name|escapejs }}',
+                exportOptions: { columns: [0, 1, 2, 3, 4] }
+            }
+        ],
+        responsive: true,
+        order: [[0, 'desc']], // Sort by Create Time (column index 0)
+        columnDefs: [
+            {
+                targets: 0, // Create Time column
+                type: 'date',
+                render: function(data, type, row, meta) {
+                    if (type === 'display') {
+                        try {
+                            const date = new Date(data);
+                            if (isNaN(date.getTime())) return 'N/A';
+                            return date.toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: 'numeric',
+                                second: 'numeric'
+                            });
+                        } catch (e) {
+                            return 'Invalid Date';
+                        }
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 3, // No. of Courses column
+                type: 'num',
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return `<span class="badge bg-primary rounded-pill">${data}</span>`;
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 4, // Activities Completed column
+                type: 'num',
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return `<span class="badge bg-info rounded-pill">${data}</span>`;
+                    }
+                    return data;
+                }
+            }
+        ],
+        language: {
+            search: "_INPUT_",
+            searchPlaceholder: "Search learners...",
+        },
+        initComplete: function() {
+            $('.dataTables_filter input').addClass('form-control form-control-sm');
+        }
+    });
+});
+</script>
+{% endblock %}

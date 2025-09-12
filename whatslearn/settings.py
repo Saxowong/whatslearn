@@ -27,24 +27,21 @@ SECRET_KEY = "django-insecure-o5r7e_!dl=&%*04m5c+k4p-r1r(9ae4)@tvtrof3%nv0)1aow8
 DEBUG = True
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = '/home/django/django_projects/whatslearn/media/'
+MEDIA_ROOT = BASE_DIR / "media"
 #
 LOGIN_URL = "/login"  # e.g., '/login/'
 LOGIN_REDIRECT_URL = "/courses"  # Where to go after successful login
 
-ALLOWED_HOSTS = [
-    'whatslearn.com',
-    'localhost',
-    '127.0.0.1',
-]
+ALLOWED_HOSTS = ["whatslearn.com"]
 
 # Application definition
 
 INSTALLED_APPS = [
     "widget_tweaks",
     "user.apps.UserConfig",
-    'corsheaders',
     "course.apps.CourseConfig",
+    "import_export",
+    "dictionary.apps.DictionaryConfig",
     "teacher.apps.TeacherConfig",  # Or "teacher" if no TeacherConfig
     "rest_framework",
     "tinymce",
@@ -70,12 +67,7 @@ TINYMCE_DEFAULT_CONFIG = {
     ],
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "https://whatslearn.com",
-]
-
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -184,8 +176,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = "/static/"
-STATIC_ROOT = '/home/django/django_projects/whatslearn/static/'
+STATIC_URL = "static/"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

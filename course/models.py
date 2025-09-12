@@ -16,6 +16,11 @@ def course_media_path(instance, filename):
     base_filename = os.path.basename(filename)
     return f"courses/{instance.id}/{base_filename}"
 
+def audio_media_path(instance, filename):
+    """Upload path: media/courses/{course_id}/{filename}"""
+    base_filename = os.path.basename(filename)
+    return f"courses/{instance.lesson.course.id}/{base_filename}"
+
 def pdf_media_path(instance, filename):
     """Upload path: media/courses/{course_id}/{filename}"""
     base_filename = os.path.basename(filename)
@@ -108,6 +113,7 @@ class Activity(models.Model):
         ("video", "Video"),
         ("html", "Content"),
         ("pdf", "PDF"),
+        ("reading", "Reading"),
     ]
     title = models.CharField(max_length=255)
     lesson = models.ForeignKey("Lesson", on_delete=models.CASCADE, related_name="activities")
@@ -115,6 +121,8 @@ class Activity(models.Model):
     order = models.IntegerField(default=0)
     html_content = models.TextField(blank=True, null=True)
     video_embed_code = models.TextField(blank=True, null=True)
+    script = models.JSONField(default=list, blank=True, null=True, help_text="Timestamps for audio captions in JSON format")
+    audio_file = models.FileField(upload_to=audio_media_path, blank=True, null=True, help_text="Upload an MP3 file")
     pdf_file = models.FileField(upload_to=pdf_media_path, blank=True, null=True, help_text="Upload a PDF file")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
