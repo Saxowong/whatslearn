@@ -4,7 +4,10 @@
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item">
-                <a href="{% url 'student_courses' %}">My Courses</a> / 
+                <a href="{% url 'student_courses' %}">My Courses</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                Dictionary
             </li>
         </ol>
     </nav>
@@ -29,7 +32,7 @@
                         {% for result in results %}
                             <div class="row mb-2 align-items-start">
                                 <div class="col-3">
-                                    <h3 class="card-title text-success" style="font-size: 1.25rem;">{{ result.input_word|default:result.db_word }}</h3>
+                                    <h3 class="card-title text-success fw-bold" style="font-size: 1.25rem;">{{ result.input_word|default:result.db_word }}</h3>
                                 </div>
                                 <div class="col-9">
                                     <p class="card-text" style="font-size: 1.2rem;">{{ result.meaning }}</p>
@@ -42,7 +45,7 @@
                     </div>
                 </div>
             {% elif query %}
-                <div class="alert alert-info">No definitions found for "{{ query }}".</div>
+                <div class="alert alert-info">No definitions found for "{{ query }}". Check for typos or try a related term.</div>
             {% endif %}
         </div>
         <!-- Right Column - Info Card -->
@@ -54,7 +57,7 @@
                 <div class="card-body">
                     <p class="card-text">
                         Look up key terms or sentences from your courses to enhance your learning experience.
-                        Enter a word or sentence to view definitions side by side.
+                        Enter a word or sentence to view definitions side by side, including similar terms for typos or variations.
                     </p>
                 </div>
             </div>
@@ -90,7 +93,7 @@
     font-size: 1rem;
 }
 .btn-outline-secondary:hover {
-    background-color: #4da6feff; /* Matches course.html hover style */
+    background-color: #f8f9fa; /* Matches course.html hover style */
 }
 </style>
 {% endblock %}
