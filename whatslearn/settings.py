@@ -32,7 +32,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 LOGIN_URL = "/login"  # e.g., '/login/'
 LOGIN_REDIRECT_URL = "/courses"  # Where to go after successful login
 
-ALLOWED_HOSTS = ["whatslearn.com"]
+ALLOWED_HOSTS = ["127.0.0.1", "whatslearn.com"]
 
 # Application definition
 
@@ -176,7 +176,13 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
