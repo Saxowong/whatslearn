@@ -26,18 +26,44 @@
                     <button type="submit" class="btn btn-primary">Search</button>
                 </div>
             </form>
+            
+            {% if match_algorithm %}
+                <div class="alert alert-info mb-3">
+                    <strong>Search method:</strong> {{ match_algorithm }}
+                    {% if query and results %}
+                        <br><small>Showing results for "{{ query }}"</small>
+                    {% endif %}
+                </div>
+            {% endif %}
+            
             {% if results %}
                 <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            {% if results|length == 1 %}
+                                Found 1 result
+                            {% else %}
+                                Found {{ results|length }} results
+                            {% endif %}
+                        </h5>
+                    </div>
                     <div class="card-body">
                         {% for result in results %}
                             <div class="mb-3">
                                 <!-- Word Row -->
                                 <div class="row align-items-center mb-2">
                                     <div class="col-9">
-                                        <h3 class="card-title text-success fw-bold" style="font-size: 1.25rem; margin-bottom: 0;">{{ result.input_word|default:result.db_word }}</h3>
+                                        <h3 class="card-title fw-bold" style="font-size: 1.25rem; margin-bottom: 0;">
+                                            {% if result.input_word and result.input_word != result.db_word %}
+                                                <span class="text-muted">{{ result.input_word }}</span> → 
+                                                <span class="text-success">{{ result.db_word }}</span>
+                                            {% else %}
+                                                <span class="text-success">{{ result.db_word }}</span>
+                                            {% endif %}
+                                        </h3>
                                     </div>
                                     <div class="col-3 text-end">
-                                        {% with word_lower=result.input_word|default:result.db_word|lower %}
+                                        {% with word_lower=result.db_word|lower %}
                                             {% with first_letter=word_lower|slice:":1" %}
                                                 <button class="btn btn-link p-0 audio-btn" data-audio-url="/media/mp3/{{ first_letter }}/{{ word_lower }}.mp3" aria-label="Listen to {{ word_lower }}" title="Play audio" style="display: none;">
                                                     <i class="bi bi-volume-up text-primary" style="font-size: 1.5rem;"></i>
@@ -52,33 +78,53 @@
                                 <!-- Meaning Row -->
                                 <div class="row">
                                     <div class="col-12">
-                                        <p class="card-text" style="font-size: 1.2rem;">{{ result.meaning }}</p>
+                                        <p class="card-text" style="font-size: 1.1rem; line-height: 1.4;">{{ result.meaning }}</p>
                                     </div>
                                 </div>
                             </div>
                             {% if not forloop.last %}
-                                <hr class="my-2">
+                                <hr class="my-3">
                             {% endif %}
                         {% endfor %}
                     </div>
                 </div>
             {% elif query %}
-                <div class="alert alert-info">No definitions found for "{{ query }}". Check for typos or try a related term.</div>
+                <div class="alert alert-warning">
+                    <strong>No definitions found for "{{ query }}"</strong>
+                    <p class="mb-0 mt-1">Check for typos or try a different word. The dictionary will automatically try to find similar words if an exact match isn't found.</p>
+                </div>
             {% endif %}
         </div>
         <!-- Right Column - Info Card -->
         <div class="col-12 col-md-4 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h6 class="mb-0">About the Dictionary</h6>
+                    <h6 class="mb-0">About Dictionary</h6>
                 </div>
                 <div class="card-body">
                     <p class="card-text">
-                        Look up key terms or sentences from your courses to enhance your learning experience.
-                        Enter a word or sentence to view definitions side by side, including similar terms for typos or variations.
+                        Enter a word or sentence to find the meaning.
                     </p>
+                    <div class="mt-2">
+                        <ul class="small ps-3">
+                            <li><strong>Exact matches</strong> show immediately</li>
+                            <li><strong>Similar words</strong> are found automatically</li>
+                        </ul>
+                    </div>
+                    {% if not query %}
+                    <div class="mt-3 p-2 bg-light rounded">
+                        <h6 class="text-muted">Try searching for:</h6>
+                        <div class="d-flex flex-wrap gap-1">
+                            <a href="?word=learn" class="badge bg-primary text-decoration-none">learn</a>
+                            <a href="?word=study" class="badge bg-primary text-decoration-none">study</a>
+                            <a href="?word=education" class="badge bg-primary text-decoration-none">education</a>
+                            <a href="?word=knowledge" class="badge bg-primary text-decoration-none">knowledge</a>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
+
         </div>
     </div>
 </div>
@@ -91,14 +137,14 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 <style>
 .card-title {
-    color: #198754; /* Bootstrap text-success, matching course.html mobile h2 */
     font-size: 1.25rem;
     font-weight: bold;
     margin-bottom: 0;
 }
 .card-text {
     color: #212529;
-    font-size: 1.2rem; /* Slightly smaller than title for hierarchy */
+    font-size: 1.1rem;
+    line-height: 1.4;
     margin-bottom: 0;
 }
 .alert-info {
@@ -115,7 +161,7 @@
     font-size: 1rem;
 }
 .btn-outline-secondary:hover {
-    background-color: #f8f9fa; /* Matches course.html hover style */
+    background-color: #f8f9fa;
 }
 /* Audio icon hover effect */
 .bi-volume-up:hover {
@@ -132,6 +178,15 @@
 .audio-loading {
     width: 1.5rem;
     height: 1.5rem;
+}
+/* Word navigation */
+.word-anchor {
+    scroll-margin-top: 100px;
+}
+/* Badge links */
+.badge:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
 }
 </style>
 {% endblock %}
@@ -291,6 +346,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize the audio buttons
     initializeAudioButtons();
+    
+    // Add smooth scrolling for word navigation
+    document.querySelectorAll('a[href^="#word-"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        });
+    });
 });
 </script>
 {% endblock %}

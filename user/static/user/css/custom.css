@@ -1,14 +1,19 @@
-/* Previous CSS remains */
+/* custom.css - Updated version */
 
-.navbar {
-    padding: top 0px, bottom 0px !important;
-}
+
+/* Base navbar styles */
 
 .custom-navbar {
-    background-color: #28a745 !important;
-    padding-left: 0px !important;
+    background-color: #343a40 !important;
+    /* Dark theme */
+    padding: 0.5rem 1rem;
+    z-index: 1001;
 }
 
+.navbar {
+    padding-top: 0px !important;
+    padding-bottom: 0px !important;
+}
 
 .nav-link {
     color: white !important;
@@ -18,21 +23,13 @@
 .navbar-toggler {
     border: none !important;
     outline: none !important;
-    /* Remove focus outline */
     box-shadow: none !important;
-    /* Remove any shadow effects */
 }
-
-
-/* Remove focus ring specifically for the toggle button */
 
 .navbar-toggler:focus {
     outline: none !important;
     box-shadow: none !important;
 }
-
-
-/* Remove active state styling */
 
 .navbar-toggler:active {
     border: none !important;
@@ -44,43 +41,57 @@
 }
 
 
-/* Add to existing styles */
+/* Search icon styles */
 
-@media (max-width: 991.98px) {
-    .navbar {
-        position: relative;
-        padding-top: 0px;
-        padding-bottom: 0px;
-    }
+.search-icon {
+    color: white !important;
+    font-size: 1.5rem;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 1002;
+}
 
-    .profile-container {
-        position: absolute;
-        color:white;
-        right: 0rem;
-        top: 0.7rem;
-        /* Anchor to top with small offset */
-        z-index: 1000;
-    }
-    .navbar-collapse {
-        width: 100%;
-    }
-    .nav-link {
-        background-color: slategray;
-        border-bottom: 1px solid;
-    }
+.search-icon:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white !important;
 }
 
 
-/* Previous styles remain */
+/* Navbar right section */
+
+.navbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    z-index: 1002;
+}
+
+
+/* Profile container - FIXED: remove absolute positioning */
 
 .profile-container {
-    position: absolute;
-    color:white;
-    right: .5rem;
-    top: 0.7rem;
-    /* Anchor to top with small offset */
-    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: white;
+    text-decoration: none;
+    padding: 0.5rem;
+    border-radius: 5px;
+    z-index: 1002;
 }
+
+.profile-container:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    text-decoration: none;
+}
+
 .profile-pic {
     width: 35px;
     height: 35px;
@@ -93,6 +104,61 @@
 .profile-pic:hover {
     transform: scale(1.1);
 }
+
+
+/* Mobile responsiveness */
+
+@media (max-width: 991.98px) {
+    .navbar-collapse {
+        width: 100%;
+    }
+    .nav-link {
+        background-color: slategray;
+        border-bottom: 1px solid;
+    }
+    .profile-container span {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .navbar-right {
+        gap: 0.25rem;
+    }
+    .search-icon {
+        font-size: 1.3rem;
+        padding: 0.4rem;
+    }
+    .profile-container {
+        padding: 0.4rem;
+    }
+    .profile-pic {
+        width: 30px;
+        height: 30px;
+    }
+}
+
+
+/* Desktop specific styles */
+
+@media (min-width: 769px) {
+    .navbar-right {
+        gap: 0.8rem;
+    }
+    .search-icon {
+        font-size: 1.4rem;
+    }
+}
+
+
+/* Force white color for search icon */
+
+.bi-search {
+    color: white !important;
+}
+
+
+/* Other existing styles */
 
 .title-row {
     display: flex;
@@ -112,9 +178,6 @@
     background-color: transparent !important;
 }
 
-
-/* Remove underline from link */
-
 .activity-item a {
     text-decoration: none;
 }
@@ -122,9 +185,6 @@
 .activity-content {
     min-height: 300px;
 }
-
-
-/* Style for the activity title */
 
 .activity-title {
     white-space: normal;
@@ -134,26 +194,17 @@
     line-height: 1.4;
 }
 
-
-/* Remove default list group item hover */
-
 .list-group-item:hover {
     background-color: #e9f5ff;
 }
 
 .activity-item:hover .activity-title {
     color: #0056b3;
-    /* Darker blue on hover */
     text-decoration: none !important;
-    /* Ensure no underline */
 }
-
-
-/* Hover effects */
 
 .activity-item:hover {
     background-color: #F6F6F6 !important;
-    /* Light gray background on hover */
     transition: all 0.2s ease;
 }
 

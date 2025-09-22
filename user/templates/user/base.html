@@ -13,7 +13,7 @@
     <title>Whatslearn</title>
     {% block extra_css %}
     <style>
-        /* Side menu styles */
+        /* Side menu styles only */
         .side-menu {
             height: 100%;
             width: 250px;
@@ -57,7 +57,6 @@
             display: block;
         }
 
-        /* Adjust main content when side menu is open */
         .main-content {
             transition: margin-left 0.3s;
         }
@@ -66,12 +65,6 @@
             margin-left: 250px;
         }
 
-        /* Ensure navbar stays above side menu */
-        .custom-navbar {
-            z-index: 1001;
-        }
-
-        /* Custom menu toggle button styles */
         .custom-menu-toggle {
             background: none;
             border: none;
@@ -88,16 +81,30 @@
             border-radius: 5px;
         }
 
-        /* Ensure menu icon is always visible */
-        @media (min-width: 0px) {
-            .custom-menu-toggle {
-                display: inline-flex !important;
-            }
+        /* Dictionary modal styles */
+        .dictionary-modal .modal-content {
+            border-radius: 10px;
+            border: none;
         }
 
-        /* Hide the navbar collapse completely */
-        .navbar-collapse {
-            display: none !important;
+        .dictionary-modal .modal-header {
+            border-bottom: 1px solid #dee2e6;
+            background-color: #f8f9fa;
+        }
+
+        .dictionary-modal .modal-title {
+            color: #198754;
+            font-weight: bold;
+        }
+
+        .dictionary-modal .btn-primary {
+            background-color: #198754;
+            border-color: #198754;
+        }
+
+        .dictionary-modal .btn-primary:hover {
+            background-color: #0f6845;
+            border-color: #0f6845;
         }
     </style>
     {% endblock %}
@@ -111,22 +118,59 @@
             </button>
             <a href="/" class="navbar-brand ms-3">Whatslearn</a>
         </div>
-        <!-- Right Section - Profile Picture -->
-        <a href="#">
+        
+        <!-- Right Section - Search Icon and Profile -->
+        <div class="navbar-right">
+            <!-- Profile Container -->
             <div class="profile-container">
-                {{ user.username }}
+                <span class="search-icon me-3" title="Search Dictionary" data-bs-toggle="modal" data-bs-target="#dictionaryModal">
+                    <i class="bi bi-search" style="color: white !important;"></i>
+                </span>
                 {% if user.profile.picture %}
                     <img src="{{ user.profile.picture.url }}"
-                         alt="Profile"
-                         class="profile-pic">
+                            alt="Profile"
+                            class="profile-pic">
                 {% else %}
                     <img src="/media/profile_pictures/dummy.png"
-                         alt="Profile"
-                         class="profile-pic">
+                            alt="Profile"
+                            class="profile-pic">
                 {% endif %}    
             </div>
-        </a>        
+        </div>
     </nav>
+
+    <!-- Dictionary Search Modal -->
+    <div class="modal fade dictionary-modal" id="dictionaryModal" tabindex="-1" aria-labelledby="dictionaryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="dictionaryModalLabel">
+                        <i class="bi bi-search me-2"></i>Dictionary Search
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="dictionarySearchForm" method="get" action="/dictionary/">
+                        <div class="mb-3">
+                            <label for="searchWord" class="form-label">Enter a word or sentence:</label>
+                            <input type="text" class="form-control" id="searchWord" name="word" 
+                                   placeholder="Type your word or sentence here..." autocomplete="off">
+                        </div>
+                    </form>
+                    <div class="text-muted small">
+                        <i class="bi bi-info-circle"></i> 
+                        Search for single words or complete sentences. The dictionary will find exact matches and similar words.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="dictionarySearchForm" class="btn btn-primary">
+                        <i class="bi bi-search me-1"></i> Search
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Side Menu -->
     <div class="side-menu" id="sideMenu">
@@ -134,6 +178,9 @@
             <li class="nav-item">
                 <a class="nav-link" href="/courses"><i class="bi bi-house-door-fill me-2"></i>My Courses</a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/dictionary/"><i class="bi bi-search me-2"></i>Dictionary</a>
+            </li>            
             <li class="nav-item">
                 <a class="nav-link" href="/manage/courses"><i class="bi bi-mortarboard-fill me-2"></i>Manage Courses</a>
             </li>
@@ -165,7 +212,7 @@
     {% block extra_js %}
 
     {% endblock %}
-        <script>
+    <script>
         $(document).ready(function() {
             // Toggle side menu
             $('.menu-toggle').click(function() {
@@ -186,6 +233,30 @@
                 $('#sideMenu').removeClass('active');
                 $('#overlay').removeClass('active');
                 $('.main-content').removeClass('menu-open');
+            });
+
+            // Dictionary modal functionality
+            $('#dictionaryModal').on('shown.bs.modal', function () {
+                $('#searchWord').focus();
+            });
+
+            // Auto-submit form when modal is hidden after search
+            $('#dictionarySearchForm').on('submit', function() {
+                $('#dictionaryModal').modal('hide');
+            });
+
+            // Optional: Add keyboard shortcut (Ctrl+K or /) to open search
+            $(document).on('keydown', function(e) {
+                // Ctrl+K or / key
+                if ((e.ctrlKey && e.key === 'k') || e.key === '/') {
+                    e.preventDefault();
+                    $('#dictionaryModal').modal('show');
+                }
+                
+                // Escape key to close modal
+                if (e.key === 'Escape' && $('#dictionaryModal').hasClass('show')) {
+                    $('#dictionaryModal').modal('hide');
+                }
             });
         });
     </script>
