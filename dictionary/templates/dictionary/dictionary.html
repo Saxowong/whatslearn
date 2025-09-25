@@ -12,11 +12,14 @@
         </ol>
     </nav>
 </div>
+
 <div class="container mt-4">
+    <div class="title-row">
+        <h2>Dictionary</h2>
+    </div>    
     <div class="row">
         <!-- Left Column - Dictionary Search -->
         <div class="col-12 col-md-8 mb-4">
-            <h2 class="mb-4">Dictionary</h2>
             <form method="get" class="mb-3">
                 <div class="input-group">
                     <input type="text" name="word" class="form-control" placeholder="Enter a word or sentence" value="{{ query }}" aria-label="Search for a word or sentence">
@@ -50,10 +53,11 @@
                     <div class="card-body">
                         {% for result in results %}
                             <div class="mb-3">
-                                <!-- Word Row -->
-                                <div class="row align-items-center mb-2">
-                                    <div class="col-9">
-                                        <h3 class="card-title fw-bold" style="font-size: 1.25rem; margin-bottom: 0;">
+                                <!-- Word Row with Flexbox Layout -->
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <!-- Word and Audio Section -->
+                                    <div class="d-flex align-items-center flex-grow-1">
+                                        <h3 class="card-title fw-bold mb-0 me-3" style="font-size: 1.25rem;">
                                             {% if result.input_word and result.input_word != result.db_word %}
                                                 <span class="text-muted">{{ result.input_word }}</span> → 
                                                 <span class="text-success">{{ result.db_word }}</span>
@@ -61,11 +65,9 @@
                                                 <span class="text-success">{{ result.db_word }}</span>
                                             {% endif %}
                                         </h3>
-                                    </div>
-                                    <div class="col-3 text-end">
                                         {% with word_lower=result.db_word|lower %}
                                             {% with first_letter=word_lower|slice:":1" %}
-                                                <button class="btn btn-link p-0 audio-btn" data-audio-url="/media/mp3/{{ first_letter }}/{{ word_lower }}.mp3" aria-label="Listen to {{ word_lower }}" title="Play audio" style="display: none;">
+                                                <button class="btn btn-link p-0 audio-btn me-2" data-audio-url="/media/mp3/{{ first_letter }}/{{ word_lower }}.mp3" aria-label="Listen to {{ word_lower }}" title="Play audio" style="display: none;">
                                                     <i class="bi bi-volume-up text-primary" style="font-size: 1.5rem;"></i>
                                                 </button>
                                                 <div class="spinner-border spinner-border-sm text-secondary audio-loading" role="status" data-audio-url="/media/mp3/{{ first_letter }}/{{ word_lower }}.mp3" style="display: none;">
@@ -74,7 +76,24 @@
                                             {% endwith %}
                                         {% endwith %}
                                     </div>
+                                    
+                                    <!-- Switch Section -->
+                                    <div class="d-flex align-items-center">
+                                        <label class="form-check-label small mb-0" for="switch-{{ forloop.counter }}">
+                                            {% if result.is_owned_by_student %}Saved{% else %}Save{% endif %}
+                                        </label>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input save-word-switch" 
+                                                   type="checkbox" 
+                                                   role="switch" 
+                                                   id="switch-{{ forloop.counter }}" 
+                                                   data-word="{{ result.db_word }}"
+                                                   {% if result.is_owned_by_student %}checked{% endif %}
+                                                   {% if not user.is_authenticated %}disabled{% endif %}>
+                                        </div>
+                                    </div>
                                 </div>
+                                
                                 <!-- Meaning Row -->
                                 <div class="row">
                                     <div class="col-12">
@@ -97,6 +116,22 @@
         </div>
         <!-- Right Column - Info Card -->
         <div class="col-12 col-md-4 mb-4">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0">Your Word Collection</h6>
+                </div>
+                <div class="card-body">
+                    {% if user.is_authenticated %}
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">Total Words</h6>
+                            <span id="word-count-badge" class="badge bg-primary">{{ student_word_count }}</span>
+                        </div>
+                        <p class="small text-muted mt-2 mb-0">Toggle the switch to add/remove words from your collection</p>
+                    {% else %}
+                        <p class="mb-2">Please <a href="{% url 'login' %}">login</a> to track your words</p>
+                    {% endif %}
+                </div>
+            </div>
             <div class="card">
                 <div class="card-header">
                     <h6 class="mb-0">About Dictionary</h6>
@@ -109,6 +144,7 @@
                         <ul class="small ps-3">
                             <li><strong>Exact matches</strong> show immediately</li>
                             <li><strong>Similar words</strong> are found automatically</li>
+                            <li><strong>Toggle switches</strong> to save words to your collection</li>
                         </ul>
                     </div>
                     {% if not query %}
@@ -124,13 +160,15 @@
                     {% endif %}
                 </div>
             </div>
-
         </div>
     </div>
 </div>
 
 <!-- Hidden audio element -->
 <audio id="audio-player" style="display: none;"></audio>
+
+<!-- CSRF Token for AJAX requests -->
+{% csrf_token %}
 {% endblock %}
 
 {% block extra_css %}
@@ -156,6 +194,17 @@
         color: #198754;
         font-weight: bold;
     }
+    /* Responsive adjustments for mobile */
+    .d-flex.justify-content-between.align-items-center.mb-2 {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+    .d-flex.align-items-center.flex-grow-1 {
+        margin-bottom: 10px;
+    }
+    .d-flex.align-items-center:last-child {
+        align-self: flex-end;
+    }
 }
 .btn-outline-secondary i {
     font-size: 1rem;
@@ -179,6 +228,28 @@
     width: 1.5rem;
     height: 1.5rem;
 }
+/* Switch styling */
+.form-switch .form-check-input {
+    width: 3em;
+    height: 1.5em;
+    margin-left: 0;
+}
+.form-switch {
+    padding-left: 0em;
+}
+.form-switch .form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.form-check-label {
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+/* Flexbox layout for better alignment */
+.d-flex.align-items-center {
+    gap: 8px;
+}
 /* Word navigation */
 .word-anchor {
     scroll-margin-top: 100px;
@@ -188,6 +259,10 @@
     opacity: 0.9;
     transform: translateY(-1px);
 }
+/* Loading state for switches */
+.save-word-switch:disabled {
+    opacity: 0.6;
+}
 </style>
 {% endblock %}
 
@@ -195,8 +270,9 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const audioPlayer = document.getElementById('audio-player');
-    const audioElements = new Map(); // Store preloaded audio elements
+    const audioElements = new Map();
     let currentlyPlaying = null;
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
     
     // Function to check if audio file exists
     async function checkAudioExists(url) {
@@ -227,6 +303,73 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Save word function
+    async function saveWord(word, isAdding) {
+        try {
+            const response = await fetch('/dictionary/save-word/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    word: word,
+                    action: isAdding ? 'add' : 'remove'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update word count badge
+                const badge = document.getElementById('word-count-badge');
+                if (badge) {
+                    const currentCount = parseInt(badge.textContent);
+                    badge.textContent = isAdding ? currentCount + 1 : Math.max(0, currentCount - 1);
+                }
+                return true;
+            } else {
+                console.error('Error saving word:', data.error);
+                return false;
+            }
+        } catch (error) {
+            console.error('Error saving word:', error);
+            return false;
+        }
+    }
+    
+    // Switch event listeners
+    document.querySelectorAll('.save-word-switch').forEach(switchElement => {
+        switchElement.addEventListener('change', async function() {
+            if (!{% if user.is_authenticated %}true{% else %}false{% endif %}) {
+                alert('Please login to save words');
+                this.checked = false;
+                return;
+            }
+            
+            const word = this.getAttribute('data-word');
+            const isAdding = this.checked;
+            const label = this.closest('.d-flex.align-items-center').querySelector('.form-check-label');
+            
+            // Disable switch during request
+            this.disabled = true;
+            label.textContent = isAdding ? 'Saving...' : 'Removing...';
+            
+            const success = await saveWord(word, isAdding);
+            
+            // Re-enable switch and update label
+            this.disabled = false;
+            if (success) {
+                label.textContent = isAdding ? 'Saved' : 'Save';
+            } else {
+                // Revert switch state if failed
+                this.checked = !isAdding;
+                label.textContent = !isAdding ? 'Saved' : 'Save';
+                alert('Failed to update word. Please try again.');
+            }
+        });
+    });
+    
     // Initialize audio buttons
     async function initializeAudioButtons() {
         const audioButtons = document.querySelectorAll('.audio-btn');
@@ -246,7 +389,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const audioExists = await checkAudioExists(audioUrl);
                 
                 if (audioExists) {
-                    // Preload the audio
                     try {
                         await preloadAudio(audioUrl);
                         button.style.display = 'inline-block';
@@ -255,7 +397,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
-                // Hide the spinner
                 if (spinner) {
                     spinner.style.display = 'none';
                 }
@@ -272,7 +413,6 @@ document.addEventListener('DOMContentLoaded', function() {
             button.addEventListener('click', function() {
                 const audioUrl = this.getAttribute('data-audio-url');
                 
-                // If this is the currently playing audio, pause it
                 if (currentlyPlaying === this) {
                     const audio = audioElements.get(audioUrl);
                     if (audio) {
@@ -283,7 +423,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
-                // Stop any currently playing audio
                 if (currentlyPlaying) {
                     const currentUrl = currentlyPlaying.getAttribute('data-audio-url');
                     const currentAudio = audioElements.get(currentUrl);
@@ -293,7 +432,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
-                // Play the new audio
                 const audio = audioElements.get(audioUrl);
                 if (audio) {
                     audio.currentTime = 0;
@@ -309,7 +447,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         
-        // Set up event listeners for preloaded audio elements
         audioElements.forEach((audio, url) => {
             audio.addEventListener('ended', function() {
                 const button = document.querySelector(`.audio-btn[data-audio-url="${url}"]`);
@@ -330,7 +467,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Update button icon based on playing state
     function updateButtonIcon(button, isPlaying) {
         const icon = button.querySelector('i');
         if (icon) {
@@ -344,22 +480,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Initialize the audio buttons
     initializeAudioButtons();
-    
-    // Add smooth scrolling for word navigation
-    document.querySelectorAll('a[href^="#word-"]').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                target.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }
-        });
-    });
 });
 </script>
 {% endblock %}

@@ -6,4 +6,5 @@ app_name = "dictionary"  # Namespace for dictionary-related URLs
 
 urlpatterns = [
     path("", dictionary_search, name="dictionary_search"),  # e.g., /dictionary/
+    path("save-word/", views.save_word, name="save_word"),
 ]

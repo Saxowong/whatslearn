@@ -42,20 +42,21 @@ from course.views import (
 def redirect_based_on_auth(request, invalid_path):
     # Skip media URLs to let static() handle them
     if invalid_path.startswith(settings.MEDIA_URL.lstrip("/")):
-        relative_path = invalid_path[len(settings.MEDIA_URL.lstrip("/")):]
+        relative_path = invalid_path[len(settings.MEDIA_URL.lstrip("/")) :]
         return serve(request, path=relative_path, document_root=settings.MEDIA_ROOT)
     # Skip static URLs to let Nginx handle them
     if invalid_path.startswith(settings.STATIC_URL.lstrip("/")):
-        relative_path = invalid_path[len(settings.STATIC_URL.lstrip("/")):]
+        relative_path = invalid_path[len(settings.STATIC_URL.lstrip("/")) :]
         return serve(request, path=relative_path, document_root=settings.STATIC_ROOT)
     # Redirect based on authentication
     if request.user.is_authenticated:
         return redirect("student_courses")
     return redirect("login")
 
+
 urlpatterns = [
     path("", lambda request: redirect("student_courses"), name="home"),
-    path("admin", admin.site.urls),
+    path("admin/", admin.site.urls),
     path("register", views.register_view, name="register"),
     path("dictionary/", include("dictionary.urls")),
     path("logout", logout_view, name="logout"),
