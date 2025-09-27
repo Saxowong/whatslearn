@@ -114,52 +114,74 @@
                 </div>
             {% endif %}
         </div>
-        <!-- Right Column - Info Card -->
+        <!-- Right Column - Word Collection -->
         <div class="col-12 col-md-4 mb-4">
-            <div class="card mb-3">
-                <div class="card-header">
-                    <h6 class="mb-0">Your Word Collection</h6>
-                </div>
-                <div class="card-body">
-                    {% if user.is_authenticated %}
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0">Total Words</h6>
-                            <span id="word-count-badge" class="badge bg-primary">{{ student_word_count }}</span>
-                        </div>
-                        <p class="small text-muted mt-2 mb-0">Toggle the switch to add/remove words from your collection</p>
-                    {% else %}
-                        <p class="mb-2">Please <a href="{% url 'login' %}">login</a> to track your words</p>
-                    {% endif %}
-                </div>
-            </div>
             <div class="card">
                 <div class="card-header">
-                    <h6 class="mb-0">About Dictionary</h6>
+                    <h6 class="mb-0">Word Collection</h6>
                 </div>
-                <div class="card-body">
-                    <p class="card-text">
-                        Enter a word or sentence to find the meaning.
-                    </p>
-                    <div class="mt-2">
-                        <ul class="small ps-3">
-                            <li><strong>Exact matches</strong> show immediately</li>
-                            <li><strong>Similar words</strong> are found automatically</li>
-                            <li><strong>Toggle switches</strong> to save words to your collection</li>
+                <div class="card-body p-0">
+                    {% if user.is_authenticated %}
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Number of Words</span>
+                                    <span id="word-count-badge" class="badge bg-primary">{{ student_word_count }}</span>
+                                </div>
+                            </li>
+                            <hr class="my-0">
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>To Revise</span>
+                                    <span class="badge bg-danger">{{ pending_revise_count }}</span>
+                                </div>
+                            </li>
                         </ul>
-                    </div>
-                    {% if not query %}
-                    <div class="mt-3 p-2 bg-light rounded">
-                        <h6 class="text-muted">Try searching for:</h6>
-                        <div class="d-flex flex-wrap gap-1">
-                            <a href="?word=learn" class="badge bg-primary text-decoration-none">learn</a>
-                            <a href="?word=study" class="badge bg-primary text-decoration-none">study</a>
-                            <a href="?word=education" class="badge bg-primary text-decoration-none">education</a>
-                            <a href="?word=knowledge" class="badge bg-primary text-decoration-none">knowledge</a>
+                        <div class="p-3">
+                            <a href="{% url 'dictionary:dictionary_revision' %}" class="btn btn-primary w-100">Revise Now</a>
                         </div>
-                    </div>
+                    {% else %}
+                        <div class="p-3 text-muted">Please <a href="{% url 'login' %}">login</a> to track your words</div>
                     {% endif %}
                 </div>
             </div>
+            
+            <!-- Latest Saved Words -->
+            {% if user.is_authenticated and latest_words %}
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Latest Saved Words</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for word in latest_words %}
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h7 class="mb-1 fw-bold text-success">{{ word.word }}</h7>
+                                <small class="text-muted">{{ word.start_at|date:"M d" }}</small>
+                            </div>
+                            <p class="mb-1 small">{{ word.meaning|truncatewords:8 }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Quick Search Suggestions -->
+            {% if not query %}
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">Try searching for:</h6>
+                    <div class="d-flex flex-wrap gap-1">
+                        <a href="?word=learn" class="badge bg-primary text-decoration-none">learn</a>
+                        <a href="?word=study" class="badge bg-primary text-decoration-none">study</a>
+                        <a href="?word=education" class="badge bg-primary text-decoration-none">education</a>
+                        <a href="?word=knowledge" class="badge bg-primary text-decoration-none">knowledge</a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -241,7 +263,6 @@
     background-color: #198754;
     border-color: #198754;
 }
-
 .form-check-label {
     font-size: 0.875rem;
     white-space: nowrap;
@@ -250,18 +271,25 @@
 .d-flex.align-items-center {
     gap: 8px;
 }
-/* Word navigation */
-.word-anchor {
-    scroll-margin-top: 100px;
+/* List group styling */
+.list-group-item {
+    border: none;
+    padding: 0.75rem 1rem;
 }
-/* Badge links */
-.badge:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
+.list-group-item:hover {
+    background-color: #f8f9fa;
 }
-/* Loading state for switches */
-.save-word-switch:disabled {
-    opacity: 0.6;
+/* Badge styling */
+.badge {
+    font-size: 0.75rem;
+}
+/* Latest words styling */
+.list-group-item h7 {
+    font-size: 0.9rem;
+}
+.list-group-item p {
+    font-size: 0.8rem;
+    color: #6c757d;
 }
 </style>
 {% endblock %}

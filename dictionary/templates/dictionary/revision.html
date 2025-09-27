@@ -1,0 +1,730 @@
+{% extends "user/base.html" %}
+{% load static %}
+{% block content %}
+<!-- Ensure jQuery and confetti are included -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<audio id="audio-correct" preload="auto">
+    <source src="/media/audio/correct.mp3" type="audio/mpeg">
+</audio>
+<audio id="audio-wrong" preload="auto">
+    <source src="/media/audio/ah.mp3" type="audio/mpeg">
+</audio>
+<div class="container pt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{% url 'dictionary:dictionary_search' %}">Dictionary</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <span>Revision</span>
+            </li>
+        </ol>
+    </nav>
+</div>
+<div class="container mt-4">
+    <div class="title-row">
+        <h2>Word Revision</h2>
+    </div>  
+    <div class="row">
+        <!-- Left Column: Welcome Block (8 columns) -->
+        <div class="col-12 col-md-8 mb-4">
+            <div id="welcomeBlock" class="text-center welcome-block p-4 mb-2 rounded">        
+                {% if revision_items_count > 0 %}
+                    <h4 id="courseTitle">Word Collection</h4>
+                    <p id="itemCount">There are <strong>{{ revision_items_count }}</strong> words due for revision.</p>
+                    <button id="startButton" class="btn btn-success btn-lg mt-3">Start Revision</button>
+                {% else %}
+                    <h4 id="courseTitle">Word Collection</h4>
+                    <p id="itemCount">No words are due for revision at this moment.</p>
+                    <p>You can do an overall revision of all words in your collection.</p>
+                    <button id="startOverallButton" class="btn btn-primary btn-lg mt-3">Start Revision</button>
+                {% endif %}
+            </div>
+            <!-- Revision Container -->
+            <div id="revisionContainer" class="flashcard-container d-none">
+                <form id="revisionForm" method="post" action="{% url 'dictionary:dictionary_revision_submit' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="responses" id="responses">
+                    <input type="hidden" name="is_completed" id="is_completed" value="false">
+                </form>
+                <div id="questions" class="questions-wrapper position-relative">
+                    {% if revision_items %}
+                        {% for item in revision_items %}
+                        <div class="question-card d-none"
+                             data-item-id="{{ item.id }}"
+                             data-item-type="{{ item.item_type }}"
+                             data-item-successes="{{ item.successes|default:0 }}"
+                             data-item-correct-answer="{{ item.correct_answer|escapejs }}"
+                             data-item-correct-sequence="{{ item.correct_sequence_json|escapejs }}"
+                             data-item-number-answers="1"
+                             data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
+                             data-item-next1="{{ item.next_1|default:1 }}"
+                             data-item-next2="{{ item.next_2|default:1 }}"
+                             data-item-reviseat="{{ item.revise_at|default:'' }}"
+                             data-item-continuerevision="{% if item.continue_revision %}true{% else %}false{% endif %}"
+                             data-item-word="{{ item.word|escapejs }}"
+                             data-item-meaning="{{ item.meaning|escapejs }}"
+                             data-item-audio="{{ item.audio }}"
+                             data-item-audioplay="start"
+                             style="min-height: 60vh;">
+                            <div class="question-content position-relative" style="flex-grow: 1;">
+                                <center><h2 class="feedback-result d-none mb-3"></h2></center>
+                                <div class="question-text fs-5 mb-2">
+                                    {{ item.word|safe }}
+                                </div>
+                                {% if item.audio %}
+                                <div class="position-absolute top-0 end-0">
+                                    <i class="bi bi-volume-up fs-2 text-primary question-audio-icon" style="cursor: pointer;"></i>
+                                </div>
+                                <audio class="d-none" preload="auto">
+                                    <source src="{{ item.audio }}" type="audio/mpeg">
+                                </audio>
+                                {% endif %}
+                                <div class="feedback-answer d-none mt-4 mb-3">
+                                    {% if item.audio %}
+                                    <div class="position-absolute top-0 end-0">
+                                        <i class="bi bi-volume-up fs-2 text-primary feedback-audio-icon d-none" style="cursor: pointer;"></i>
+                                    </div>
+                                    {% endif %}
+                                    <p class="feedback-answer-label">The meaning is:</p>
+                                    <p class="correct-answer-text fs-5 text-primary"></p>
+                                </div>
+                            </div>
+                            <div class="answer-buttons row g-2 mt-0" style="margin-top: auto;">
+                                <div class="col-12 text-end mb-1">
+                                    <a href="#" class="skip-revision">Skip future revision</a>
+                                </div>
+                                {% for option in item.options %}
+                                <div class="col-6">
+                                    <button type="button" class="btn btn-outline-primary w-100 answer-btn" data-option="{{ option|escapejs }}">{{ option }}</button>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="feedback-buttons d-none mt-3 d-flex justify-content-center gap-2" style="margin-top: auto;">
+                                <button type="button" class="btn btn-primary continue-btn">Continue</button>
+                                <button type="button" class="btn btn-secondary stop-btn">Stop</button>
+                            </div>
+                            <div class="fireworks d-none"></div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-warning">
+                            No words available for revision.
+                        </div>
+                    {% endif %}
+                </div>
+                <!-- Skip Revision Confirmation Modal -->
+                <div class="modal fade" id="skipConfirmationModal" tabindex="-1" aria-labelledby="skipConfirmationModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-body text-center">
+                                <h4 class="modal-title mb-3">Skip Revision</h4>
+                                <p>Do you want to skip this word in future revisions?</p>
+                                <div class="d-flex justify-content-center gap-2">
+                                    <button type="button" class="btn btn-primary" id="skipConfirmButton">Yes</button>
+                                    <button type="button" class="btn btn-secondary" id="skipCancelButton">No</button>
+                                </div>        
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Feedback Modal -->
+                <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content" style="position: relative;">
+                            <div class="modal-body text-center">
+                                <h4 class="modal-title mb-3" id="feedbackResult"></h4>
+                                <p id="correctAnswerText"></p>
+                                <div id="progressIcons" class="modal-body mb-3">
+                                    <div class="d-flex justify-content-center align-items-center gap-1">
+                                        <div class="progress-icons"></div>
+                                        <span class="ms-2 correct-count">0/10</span>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-center gap-2">
+                                    <button type="button" class="btn btn-primary" id="continueButton">Continue</button>
+                                    <button type="button" class="btn btn-secondary" id="stopButton">View Results</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>            
+        </div>
+        <!-- Right Column: Word Collection Summary (4 columns) -->
+        <div class="col-12 col-md-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Word Collection</h6>
+                </div>
+                <div class="card-body p-0">
+                    {% if user.is_authenticated %}
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Number of Words</span>
+                                    <span id="word-count-badge" class="badge bg-primary">{{ student_word_count }}</span>
+                                </div>
+                            </li>
+                            <hr class="my-0">
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>To Revise</span>
+                                    <span class="badge bg-secondary">{{ revision_items_count }}</span>
+                                </div>
+                            </li>
+                        </ul>
+                        <p class="small text-muted p-3 mb-0">Revise words to improve your vocabulary!</p>
+                    {% else %}
+                        <div class="p-3 text-muted">Please <a href="{% url 'login' %}">login</a> to track your words</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+.welcome-block {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    min-height: 50vh;
+}
+.welcome-block.d-none {
+    display: none;
+}
+.flashcard-container.d-none {
+    display: none;
+}
+.questions-wrapper, .flashcard-container {
+    position: relative;
+}
+.question-card {
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    position: relative;
+}
+.question-content {
+    flex-grow: 1;
+}
+.question-text {
+    margin-right: 40px;
+}
+.answer-buttons {
+    margin-top: auto;
+}
+.answer-buttons button {
+    white-space: normal;
+    min-height: 60px;
+}
+.feedback-buttons {
+    margin-top: auto;
+}
+.correct-answer {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+}
+.incorrect-answer {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+}
+.bi-volume-up {
+    color: #0d6efd;
+    cursor: pointer;
+}
+.bi-volume-up:hover {
+    opacity: 0.8;
+}
+.progress-icon {
+    font-size: 1em;
+    margin: 0 2px;
+}
+.list-group-item {
+    border: none;
+    padding: 0.75rem 1rem;
+}
+.list-group-item:hover {
+    background-color: #f8f9fa;
+}
+.badge {
+    font-size: 0.75rem;
+}
+.skip-revision {
+    display: block;
+    font-size: 1em;
+    text-decoration: none;
+}
+.skip-revision:hover {
+    text-decoration: underline;
+}
+.feedback-result.correct {
+    color: #28a745;
+}
+.feedback-result.incorrect {
+    color: #dc3545;
+}
+.feedback-answer-label {
+    font-weight: bold;
+}
+.fireworks {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 1000;
+}
+.firework-particle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #ffd700;
+    border-radius: 50%;
+    animation: firework 1.5s ease-out forwards;
+}
+@keyframes firework {
+    0% {
+        transform: translate(0, 0);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--x), var(--y));
+        opacity: 0;
+    }
+}
+</style>
+<script>
+$(document).ready(function() {
+    console.log('jQuery loaded and document ready');
+    let dueItems = [];
+    let otherItems = [];
+    let revisedItems = [];
+    let currentItem = null;
+    let correctCount = 0;
+    const MAX_ITEMS_PER_ROUND = 10;
+    let isProcessingClick = false;
+
+    function shuffleArray(array) {
+        if (!array || array.length <= 1) {
+            console.log('shuffleArray: Array is empty or has only one item');
+            return array;
+        }
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    function triggerConfetti() {
+        console.log('Triggering confetti');
+        var duration = 1 * 1000;
+        var end = Date.now() + duration;
+        (function frame() {
+            confetti({
+                particleCount: 5,
+                startVelocity: 25,
+                spread: 360,
+                ticks: 30,
+                origin: { x: Math.random(), y: Math.random() / 2 }
+            });
+            if (Date.now() < end) {
+                requestAnimationFrame(frame);
+            }
+        })();
+    }
+
+    function initializeLists() {
+        console.log('Initializing lists');
+        dueItems = [];
+        otherItems = [];
+        revisedItems = [];
+        correctCount = 0;
+        const now = new Date();
+        $('.question-card').each(function(index) {
+            const $card = $(this);
+            console.log('Processing item', index, 'ID:', $card.data('item-id'));
+            let correctAnswers;
+            try {
+                correctAnswers = JSON.parse($card.data('item-correct-sequence') || '[]');
+            } catch (e) {
+                console.error('Error parsing correct-sequence for item', $card.data('item-id'), e);
+                correctAnswers = [$card.data('item-correct-answer') || ''];
+            }
+            const item = {
+                id: $card.data('item-id'),
+                item_type: $card.data('item-type'),
+                successes: parseInt($card.data('item-successes') || 0),
+                is_master: $card.data('item-is-master') === true,
+                correctAnswers: correctAnswers,
+                correctAnswer: $card.data('item-correct-answer') || '',
+                numberAnswers: parseInt($card.data('item-number-answers') || 1),
+                next_1: parseInt($card.data('item-next1') || 1),
+                next_2: parseInt($card.data('item-next2') || 1),
+                revise_at: $card.data('item-reviseat') || null,
+                continue_revision: $card.data('item-continuerevision') === true,
+                word: $card.data('item-word'),
+                meaning: $card.data('item-meaning'),
+                audio_play: $card.data('item-audioplay') || 'start',
+                element: this,
+                options: $card.find('.answer-btn').map(function() { return $(this).data('option'); }).get()
+            };
+            console.log('Item data:', item);
+            if (item.revise_at && new Date(item.revise_at) <= now && item.continue_revision) {
+                dueItems.push(item);
+            } else if (item.continue_revision) {
+                otherItems.push(item);
+            }
+        });
+        console.log('Due items:', dueItems.length, 'Other items:', otherItems.length);
+        if (dueItems.length === 0 && otherItems.length === 0) {
+            console.error('No items available for revision');
+            $('#welcomeBlock').html('<p class="text-danger">Error: No revision items available in your word collection.</p>');
+            $('#startButton, #startOverallButton').prop('disabled', true);
+            return;
+        }
+        dueItems.sort((a, b) => {
+            if (!a.revise_at) return 1;
+            if (!b.revise_at) return -1;
+            return new Date(a.revise_at) - new Date(b.revise_at);
+        });
+        if (dueItems.length === 0) {
+            otherItems = shuffleArray(otherItems);
+        } else {
+            otherItems.sort((a, b) => a.successes - b.successes || a.id - b.id);
+        }
+        updateProgressIcons();
+        dueItems.concat(otherItems).forEach(item => reshuffleOptions(item));
+    }
+
+    function processNextItem() {
+        console.log('Processing next item. Revised items:', revisedItems.length);
+        if (revisedItems.length >= MAX_ITEMS_PER_ROUND) {
+            console.log('Max items reached, showing round completion');
+            saveProgress(true);
+            showRoundCompletion();
+            return;
+        }
+        if (dueItems.length > 0) {
+            currentItem = dueItems.shift();
+            console.log('Selected due item:', currentItem.id);
+        } else if (otherItems.length > 0) {
+            currentItem = otherItems.shift();
+            otherItems.push(currentItem);
+            console.log('Selected other item:', currentItem.id);
+        } else {
+            console.log('No items left, showing round completion');
+            saveProgress(true);
+            showRoundCompletion();
+            return;
+        }
+        if (currentItem) {
+            showItem(currentItem);
+            $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
+            $('.feedback-result, .feedback-answer, .feedback-buttons, .feedback-audio-icon').addClass('d-none');
+            $('.question-text, .answer-buttons, .question-audio-icon').removeClass('d-none');
+        } else {
+            console.error('No current item selected');
+            saveProgress(true);
+            showRoundCompletion();
+        }
+    }
+
+    function showItem(item) {
+        console.log('Showing item:', item.id);
+        $('.question-card').addClass('d-none');
+        $(item.element).removeClass('d-none');
+        $(item.element).find('.question-text').html(item.word);
+        const audioElement = $(item.element).find('audio')[0];
+        if (audioElement && (item.audio_play === 'start' || item.audio_play === 'both')) {
+            try {
+                audioElement.currentTime = 0;
+                audioElement.play().catch(function(error) {
+                    console.error('Audio playback failed on showItem:', error);
+                });
+            } catch (error) {
+                console.error('Error accessing audio element on showItem:', error);
+            }
+        }
+    }
+
+    function reshuffleOptions(item) {
+        console.log('Reshuffling options for item:', item.id);
+        const buttons = $(item.element).find('.answer-btn');
+        let options = item.options.slice();
+        if (options.length <= 1) {
+            console.log('reshuffleOptions: Not enough options to shuffle');
+            return;
+        }
+        shuffleArray(options);
+        buttons.each(function(index) {
+            $(this).text(options[index] || '');
+            $(this).data('option', options[index] || '');
+        });
+    }
+
+    function updateProgressIcons() {
+        console.log('Updating progress icons. Correct count:', correctCount);
+        const progressIcons = $('.progress-icons').empty();
+        for (let i = 0; i < correctCount; i++) {
+            progressIcons.append('<i class="bi bi-check-circle-fill progress-icon text-success"></i>');
+        }
+        for (let i = correctCount; i < MAX_ITEMS_PER_ROUND; i++) {
+            progressIcons.append('<i class="bi bi-circle progress-icon text-secondary"></i>');
+        }
+        $('.correct-count').text(`${correctCount}/${MAX_ITEMS_PER_ROUND}`);
+    }
+
+    function showRoundCompletion() {
+        console.log('Showing round completion');
+        $('#feedbackModal').modal('show');
+        $('#feedbackResult').text('Round Completed!');
+        $('#correctAnswerText').text(`You got ${correctCount} out of ${MAX_ITEMS_PER_ROUND} correct.`);
+        $('#continueButton').text('Continue').show();
+        $('#stopButton').text('View Results').show();
+        updateProgressIcons();
+    }
+
+    function showFeedback(isCorrect, correctAnswer, onCloseCallback) {
+        console.log('Showing feedback:', isCorrect ? 'Correct' : 'Incorrect', 'Correct Answer:', correctAnswer);
+        const $card = $(currentItem.element);
+        const $feedbackResult = $card.find('.feedback-result');
+        const $feedbackAnswer = $card.find('.feedback-answer');
+        const $correctAnswerText = $card.find('.correct-answer-text');
+        const $feedbackButtons = $card.find('.feedback-buttons');
+        const $questionElements = $card.find('.answer-buttons, .question-audio-icon');
+        const $feedbackAudioIcon = $card.find('.feedback-audio-icon');
+        const audioElement = $card.find('audio')[0];
+        const feedbackAudio = isCorrect ? document.getElementById('audio-correct') : document.getElementById('audio-wrong');
+        $questionElements.addClass('d-none');
+        $feedbackResult.text(isCorrect ? 'Correct' : 'Incorrect').addClass(isCorrect ? 'correct' : 'incorrect').removeClass('d-none');
+        // Use the meaning directly from the item to ensure correct display
+        $correctAnswerText.text(currentItem.meaning || correctAnswer);
+        $feedbackAnswer.removeClass('d-none');
+        $feedbackButtons.removeClass('d-none');
+        $card.find('.question-text').removeClass('d-none');
+        if (audioElement) {
+            $feedbackAudioIcon.removeClass('d-none');
+        }
+        try {
+            feedbackAudio.currentTime = 0;
+            feedbackAudio.play().then(() => {
+                if (audioElement && (currentItem.audio_play === 'end' || currentItem.audio_play === 'both')) {
+                    audioElement.currentTime = 0;
+                    audioElement.play().catch(function(error) {
+                        console.error('Item audio playback failed in showFeedback:', error);
+                    });
+                }
+            }).catch(function(error) {
+                console.error('Feedback audio playback failed:', error);
+            });
+        } catch (error) {
+            console.error('Error accessing feedback audio in showFeedback:', error);
+        }
+        $card.find('.continue-btn').off('click').on('click', () => {
+            console.log('Continue button clicked');
+            if (onCloseCallback) onCloseCallback();
+        });
+        $card.find('.stop-btn').off('click').on('click', () => {
+            console.log('Stop button clicked');
+            saveProgress();
+            isProcessingClick = false;
+        });
+        if (revisedItems.length >= MAX_ITEMS_PER_ROUND) {
+            $card.find('.continue-btn').hide();
+            $card.find('.stop-btn').text('Finish').show();
+        } else {
+            $card.find('.continue-btn').text(isCorrect ? 'Continue' : 'Try Again').show();
+            $card.find('.stop-btn').text('Stop').show();
+        }
+        if (isCorrect) {
+            triggerConfetti();
+        }
+    }
+
+    function handleAnswer($button) {
+        if (isProcessingClick) {
+            console.log('Click ignored: Already processing a click');
+            return;
+        }
+        isProcessingClick = true;
+        const selectedOption = $button.data('option');
+        const $card = $(currentItem.element);
+        const correctAnswer = currentItem.correctAnswer;
+        if (!correctAnswer) {
+            console.error('No correct answer defined for item');
+            showFeedback(false, currentItem.meaning || 'Unknown', function() {
+                reshuffleOptions(currentItem);
+                showItem(currentItem);
+                isProcessingClick = false;
+            });
+            return;
+        }
+        const isCorrect = selectedOption === correctAnswer;
+        console.log('Handling answer:', { selectedOption: selectedOption, correctAnswer: correctAnswer, isCorrect: isCorrect });
+        $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
+        $button.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'));
+        if (isCorrect) {
+            correctCount++;
+            currentItem.successes += 1;
+            const now = new Date();
+            const reviseAt = currentItem.revise_at ? new Date(currentItem.revise_at) : null;
+            if (!reviseAt || now > reviseAt) {
+                let temp = currentItem.next_2;
+                currentItem.next_2 = currentItem.next_1 + currentItem.next_2;
+                currentItem.next_1 = temp;
+                const newReviseAt = new Date(now.setDate(now.getDate() + currentItem.next_2));
+                currentItem.revise_at = newReviseAt.toISOString();
+            }
+            currentItem.is_master = currentItem.successes >= 3;
+            revisedItems.push(currentItem);
+            showFeedback(isCorrect, currentItem.meaning, function() {
+                processNextItem();
+                isProcessingClick = false;
+            });
+        } else {
+            if (currentItem.revise_at && new Date(currentItem.revise_at) <= new Date()) {
+                dueItems.unshift(currentItem);
+            } else {
+                otherItems.unshift(currentItem);
+            }
+            showFeedback(isCorrect, currentItem.meaning, function() {
+                reshuffleOptions(currentItem);
+                showItem(currentItem);
+                isProcessingClick = false;
+            });
+        }
+    }
+
+    function saveProgress(isCompleted = false) {
+        console.log('Saving progress. Revised items:', revisedItems);
+        const responses = revisedItems.map(item => ({
+            student_word_id: item.id,
+            successes: item.successes,
+            next_1: item.next_1,
+            next_2: item.next_2,
+            revise_at: item.revise_at,
+            continue_revision: item.continue_revision
+        }));
+        $('#responses').val(JSON.stringify(responses));
+        $('#is_completed').val(isCompleted);
+        $.ajax({
+            url: $('#revisionForm').attr('action'),
+            method: 'POST',
+            data: $('#revisionForm').serializeArray(),
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val()
+            },
+            dataType: 'json',
+            success: function(response) {
+                console.log('Save progress success:', response);
+                if (response.status === 'success') {
+                    $('#itemCount').html(`There are <strong>${response.stats.remaining_items}</strong> words due for revision.`);
+                    $('#revisionContainer').addClass('d-none');
+                    $('#welcomeBlock').removeClass('d-none');
+                    $('#welcomeBlock').prepend(
+                        `<div class="alert alert-success mb-3">${response.message}</div>`
+                    );
+                    if (response.redirect_url) {
+                        window.location.href = response.redirect_url;
+                    }
+                } else {
+                    alert('Error saving progress: ' + (response.message || 'Unknown error'));
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Save progress error:', xhr, status, error);
+                alert('Error saving progress: ' + (xhr.responseJSON?.message || 'Unknown error'));
+            }
+        });
+    }
+
+    $(document).on('click', '#startButton, #startOverallButton', function(e) {
+        console.log('Start button clicked:', $(this).attr('id'));
+        e.preventDefault();
+        initializeLists();
+        if (dueItems.length === 0 && otherItems.length === 0) {
+            return;
+        }
+        $('#welcomeBlock').addClass('d-none');
+        $('#revisionContainer').removeClass('d-none');
+        processNextItem();
+    });
+
+    $(document).on('click', '#continueButton', function() {
+        console.log('Continue button clicked in feedback modal');
+        $('#feedbackModal').modal('hide');
+        processNextItem();
+    });
+
+    $(document).on('click', '#stopButton', function() {
+        console.log('Stop button clicked in feedback modal');
+        saveProgress();
+    });
+
+    $(document).on('click', '.answer-btn', function() {
+        console.log('Answer button clicked:', $(this).data('option'));
+        handleAnswer($(this));
+    });
+
+    $(document).on('click', '.question-audio-icon', function() {
+        const audioElement = $(this).closest('.question-content').find('audio')[0];
+        if (audioElement) {
+            try {
+                audioElement.currentTime = 0;
+                audioElement.play().catch(function(error) {
+                    console.error('Audio playback failed:', error);
+                });
+            } catch (error) {
+                console.error('Error accessing audio element:', error);
+            }
+        }
+    });
+
+    $(document).on('click', '.feedback-audio-icon', function() {
+        const audioElement = $(this).closest('.question-content').find('audio')[0];
+        if (audioElement) {
+            try {
+                audioElement.currentTime = 0;
+                audioElement.play().catch(function(error) {
+                    console.error('Audio playback failed:', error);
+                });
+            } catch (error) {
+                console.error('Error accessing audio element:', error);
+            }
+        }
+    });
+
+    $(document).on('click', '.skip-revision', function(e) {
+        e.preventDefault();
+        console.log('Skip revision clicked');
+        if (currentItem) {
+            $('#skipConfirmationModal').modal('show');
+        }
+    });
+
+    $(document).on('click', '#skipConfirmButton', function() {
+        console.log('Skip confirmed for item:', currentItem.id);
+        if (currentItem) {
+            currentItem.continue_revision = false;
+            revisedItems.push(currentItem);
+            $(currentItem.element).attr('data-item-continuerevision', 'false');
+            processNextItem();
+        }
+        $('#skipConfirmationModal').modal('hide');
+    });
+
+    $(document).on('click', '#skipCancelButton', function() {
+        console.log('Skip cancelled');
+        $('#skipConfirmationModal').modal('hide');
+    });
+});
+</script>
+{% endblock %}

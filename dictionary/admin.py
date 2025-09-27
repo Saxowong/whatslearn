@@ -35,7 +35,26 @@ class StudentWordResource(resources.ModelResource):
         return student_word.student.user.username
 
     def dehydrate_dictionary_word(self, student_word):
-        return student_word.dictionary_item.word
+        return student_word.dictionary_item.word if student_word.dictionary_item else ""
+
+    def before_import_row(self, row, **kwargs):
+        # Handle importing student_username to link to Profile
+        if "student_username" in row:
+            username = row["student_username"]
+            try:
+                profile = Profile.objects.get(user__username=username)
+                row["student"] = profile.id
+            except Profile.DoesNotExist:
+                raise ValueError(f"Profile with username {username} does not exist")
+        # Handle importing dictionary_word to link to DictionaryItem
+        if "dictionary_word" in row:
+            word = row["dictionary_word"]
+            try:
+                dictionary_item = DictionaryItem.objects.get(word=word)
+                row["dictionary_item"] = dictionary_item.id
+            except DictionaryItem.DoesNotExist:
+                row["dictionary_item"] = None
+        return row
 
 
 @admin.register(StudentWord)
@@ -74,7 +93,7 @@ class StudentWordAdmin(ImportExportMixin, admin.ModelAdmin):
     student_username.admin_order_field = "student__user__username"
 
     def dictionary_reference(self, obj):
-        return obj.dictionary_item.word
+        return obj.dictionary_item.word if obj.dictionary_item else ""
 
     dictionary_reference.short_description = "Dictionary Reference"
     dictionary_reference.admin_order_field = "dictionary_item__word"
@@ -97,10 +116,5 @@ class StudentWordAdmin(ImportExportMixin, admin.ModelAdmin):
 @admin.register(DictionaryItem)
 class DictionaryItemAdmin(ImportExportMixin, admin.ModelAdmin):
     resource_class = DictionaryItemResource
-    list_display = ("word", "meaning", "student_word_count")
+    list_display = ("word", "meaning")
     search_fields = ("word",)
-
-    def student_word_count(self, obj):
-        return obj.student_words.count()
-
-    student_word_count.short_description = "Students Learning"

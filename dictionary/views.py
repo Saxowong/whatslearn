@@ -1,32 +1,43 @@
-from django.shortcuts import render
-from django.db.models import Q
-from .models import DictionaryItem, StudentWord
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Subquery, OuterRef, Q
+from django.utils import timezone
+from .models import StudentWord, DictionaryItem
 from user.models import Profile
-import re, json
+import json, random, re
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.urls import reverse
 
 
+@login_required
 def dictionary_search(request):
     query = request.GET.get("word", "").strip()
     results = []
     match_algorithm = None
     student_word_count = 0
+    pending_revise_count = 0
 
     # Get the current user's profile and count their words
     if request.user.is_authenticated:
         try:
             profile = request.user.profile
             student_word_count = StudentWord.objects.filter(student=profile).count()
+            # Count words where revise_at is not null and is before current time
+            pending_revise_count = StudentWord.objects.filter(
+                student=profile, revise_at__isnull=False, revise_at__lte=timezone.now()
+            ).count()
         except Profile.DoesNotExist:
-            # Handle case where profile doesn't exist yet
             student_word_count = 0
+            pending_revise_count = 0
     else:
         student_word_count = 0
+        pending_revise_count = 0
 
     print(f"DEBUG - Input query: '{query}'")
     print(f"DEBUG - Student word count: {student_word_count}")
+    print(f"DEBUG - Pending revise count: {pending_revise_count}")
 
     if query:
         # Remove punctuation and split into words
@@ -166,6 +177,7 @@ def dictionary_search(request):
             "query": query,
             "match_algorithm": match_algorithm,
             "student_word_count": student_word_count,
+            "pending_revise_count": pending_revise_count,
         },
     )
 
@@ -223,3 +235,184 @@ def save_word(request):
 
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)})
+
+
+@login_required
+def dictionary_revision(request):
+    user = request.user.profile
+    # Get the count of words due for revision
+    revision_items_count = StudentWord.objects.filter(
+        student=user,
+        revise_at__lte=timezone.now(),
+        continue_revision=True,
+    ).count()
+
+    # Get items due for revision first
+    due_items = (
+        StudentWord.objects.filter(
+            student=user,
+            revise_at__lte=timezone.now(),
+            continue_revision=True,
+        )
+        .values(
+            "id",
+            "word",
+            "meaning",
+            "successes",
+            "is_master",
+            "next_1",
+            "next_2",
+            "revise_at",
+            "continue_revision",
+        )
+        .order_by("revise_at")
+    )
+
+    # If less than 10 due items, get additional items with fewest successes
+    items = list(due_items)
+    if len(items) < 10:
+        remaining_count = 10 - len(items)
+        additional_items = (
+            StudentWord.objects.filter(
+                student=user,
+                continue_revision=True,
+            )
+            .exclude(id__in=[item["id"] for item in items])
+            .values(
+                "id",
+                "word",
+                "meaning",
+                "successes",
+                "is_master",
+                "next_1",
+                "next_2",
+                "revise_at",
+                "continue_revision",
+            )
+            .order_by("successes", "id")[:remaining_count]
+        )
+        items.extend(additional_items)
+
+    # Prepare revision items with options
+    revision_items = []
+    all_meanings = list(
+        StudentWord.objects.filter(student=user)
+        .values_list("meaning", flat=True)
+        .distinct()
+    )
+
+    for item in items:
+        # Generate audio URL
+        word_lower = item["word"].lower()
+        first_letter = word_lower[0] if word_lower else ""
+        audio_url = (
+            f"/media/mp3/{first_letter}/{word_lower}.mp3"
+            if first_letter and word_lower
+            else None
+        )
+
+        # Generate multiple-choice options
+        correct_answer = item["meaning"]
+        options = [correct_answer]
+        # Select up to 3 distractors from other words' meanings
+        other_meanings = [m for m in all_meanings if m != correct_answer]
+        distractors = (
+            random.sample(other_meanings, min(3, len(other_meanings)))
+            if other_meanings
+            else []
+        )
+        options.extend(distractors)
+        # Pad with generic options if needed
+        while len(options) < 4:
+            options.append(f"Option {len(options)}")
+        random.shuffle(options)
+
+        item_data = {
+            "id": item["id"],
+            "item_type": "mc",  # Treat as multiple-choice
+            "word": item["word"],
+            "meaning": item["meaning"],
+            "successes": item["successes"],
+            "is_master": item["is_master"],
+            "next_1": item["next_1"],
+            "next_2": item["next_2"],
+            "revise_at": (item["revise_at"].isoformat() if item["revise_at"] else None),
+            "continue_revision": item["continue_revision"],
+            "options": options,
+            "correct_answer": correct_answer,
+            "correct_sequence_json": json.dumps([correct_answer]),
+            "audio": audio_url,
+            "audio_play": "start",
+        }
+        revision_items.append(item_data)
+
+    context = {
+        "revision_items": revision_items,
+        "revision_items_count": revision_items_count,
+        "student_word_count": StudentWord.objects.filter(student=user).count(),
+    }
+    return render(request, "dictionary/revision.html", context)
+
+
+@csrf_exempt
+@require_POST
+@login_required
+def dictionary_revision_submit(request):
+    try:
+        data = json.loads(request.POST.get("responses", "[]"))
+        is_completed = request.POST.get("is_completed", "false").lower() == "true"
+
+        if not data:
+            return JsonResponse({"status": "error", "message": "No responses provided"})
+
+        profile = request.user.profile
+        updated_items = []
+
+        for response in data:
+            student_word_id = response.get("student_word_id")
+            successes = response.get("successes")
+            next_1 = response.get("next_1")
+            next_2 = response.get("next_2")
+            revise_at = response.get("revise_at")
+            continue_revision = response.get("continue_revision", True)
+
+            try:
+                student_word = StudentWord.objects.get(
+                    id=student_word_id, student=profile
+                )
+                student_word.successes = successes
+                student_word.next_1 = next_1
+                student_word.next_2 = next_2
+                student_word.revise_at = revise_at
+                student_word.continue_revision = continue_revision
+                student_word.is_master = successes >= 3
+                student_word.save()
+                updated_items.append(student_word_id)
+            except StudentWord.DoesNotExist:
+                return JsonResponse(
+                    {
+                        "status": "error",
+                        "message": f"StudentWord with ID {student_word_id} not found",
+                    }
+                )
+
+        # Count remaining items due for revision
+        remaining_items = StudentWord.objects.filter(
+            student=profile,
+            revise_at__lte=timezone.now(),
+            continue_revision=True,
+        ).count()
+
+        response_data = {
+            "status": "success",
+            "message": "Progress saved successfully!",
+            "stats": {"remaining_items": remaining_items},
+        }
+
+        if is_completed:
+            response_data["redirect_url"] = reverse("dictionary:dictionary_search")
+
+        return JsonResponse(response_data)
+
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)})
