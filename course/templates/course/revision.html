@@ -76,7 +76,7 @@
                              data-item-answer3="{{ item.answer3|escapejs }}"
                              data-item-answer4="{{ item.answer4|escapejs }}"
                              data-item-audioplay="{{ item.audio_play|default:'start' }}"
-                             style="min-height: 60vh;">
+                             style="min-height: 400px;">
                             <div class="question-content position-relative" style="flex-grow: 1;">
                                 <center><h2 class="feedback-result d-none mb-3"></h2></center>
                                 <div class="question-text fs-5 mb-2">
@@ -197,7 +197,7 @@
 .welcome-block {
     border: 1px solid #ddd;
     border-radius: 8px;
-    min-height: 50vh;
+    min-height: 400px;
 }
 .welcome-block.d-none {
     display: none;
@@ -447,14 +447,18 @@ $(document).ready(function() {
             answerIndex = 1;
             numberOfAnswers = currentItem.isFillInTheBlank ? currentItem.numberAnswers : 1;
             showItem(currentItem);
-            $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
-            $('.feedback-result, .feedback-answer, .feedback-buttons, .feedback-audio-icon').addClass('d-none');
-            $('.question-text, .answer-buttons, .question-audio-icon, img').removeClass('d-none');
+            resetQuestionState();
         } else {
             console.error('No current item selected');
             saveProgress(true);
             showRoundCompletion();
         }
+    }
+
+    function resetQuestionState() {
+        $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
+        $('.feedback-result, .feedback-answer, .feedback-buttons, .feedback-audio-icon').addClass('d-none');
+        $('.question-text, .answer-buttons, .question-audio-icon, img').removeClass('d-none');
     }
 
     function showItem(item) {
@@ -519,20 +523,22 @@ $(document).ready(function() {
         const $feedbackAnswer = $card.find('.feedback-answer');
         const $correctAnswerText = $card.find('.correct-answer-text');
         const $feedbackButtons = $card.find('.feedback-buttons');
-        const $answerButtons = $card.find('.answer-buttons');
         const $questionElements = $card.find('.answer-buttons, .question-audio-icon, img');
         const $feedbackAudioIcon = $card.find('.feedback-audio-icon');
         const audioElement = $card.find('audio')[0];
         const feedbackAudio = isCorrect ? document.getElementById('audio-correct') : document.getElementById('audio-wrong');
+        
         $questionElements.addClass('d-none');
         $feedbackResult.text(isCorrect ? 'Correct!' : 'Incorrect!').addClass(isCorrect ? 'correct' : 'incorrect').removeClass('d-none');
         $correctAnswerText.html(isCorrect ? correctAnswer : `<strong>${correctAnswer}</strong>`);
         $feedbackAnswer.removeClass('d-none');
         $feedbackButtons.removeClass('d-none');
         $card.find('.question-text').removeClass('d-none');
+        
         if (audioElement) {
             $feedbackAudioIcon.removeClass('d-none');
         }
+        
         try {
             feedbackAudio.currentTime = 0;
             feedbackAudio.play().then(() => {
@@ -548,15 +554,19 @@ $(document).ready(function() {
         } catch (error) {
             console.error('Error accessing feedback audio in showFeedback:', error);
         }
-        $card.find('.continue-btn').off('click').on('click', () => {
+        
+        // Clear previous event handlers and set new ones
+        $card.find('.continue-btn').off('click').on('click', function() {
             console.log('Continue/Try Again button clicked');
             if (onCloseCallback) onCloseCallback();
         });
-        $card.find('.stop-btn').off('click').on('click', () => {
+        
+        $card.find('.stop-btn').off('click').on('click', function() {
             console.log('Stop button clicked');
             saveProgress();
             isProcessingClick = false;
         });
+        
         if (revisedItems.length >= MAX_ITEMS_PER_ROUND) {
             $card.find('.continue-btn').hide();
             $card.find('.stop-btn').text('Finish').show();
@@ -564,6 +574,7 @@ $(document).ready(function() {
             $card.find('.continue-btn').text(isCorrect ? 'Continue' : 'Try Again').show();
             $card.find('.stop-btn').text('Stop').show();
         }
+        
         if (isCorrect) {
             triggerConfetti();
         }
@@ -583,14 +594,17 @@ $(document).ready(function() {
             showFeedback(false, currentItem.correctAnswers.join(', '), function() {
                 reshuffleOptions(currentItem);
                 showItem(currentItem);
+                resetQuestionState();
                 isProcessingClick = false;
             });
             return;
         }
         const isCorrect = selectedOption === correctAnswer;
         console.log('Handling answer:', { selectedOption: selectedOption, correctAnswer: correctAnswer, isCorrect: isCorrect });
+        
         $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
         $button.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'));
+        
         if (isCorrect) {
             correctCount++;
             currentItem.successes += 1;
@@ -605,19 +619,24 @@ $(document).ready(function() {
             }
             currentItem.is_master = currentItem.successes >= 3;
             revisedItems.push(currentItem);
+            
             showFeedback(isCorrect, currentItem.correctAnswers.join(', '), function() {
                 processNextItem();
                 isProcessingClick = false;
             });
         } else {
+            // For incorrect answers, add to the beginning of the appropriate list
             if (currentItem.revise_at && new Date(currentItem.revise_at) <= new Date()) {
                 dueItems.unshift(currentItem);
             } else {
                 otherItems.unshift(currentItem);
             }
+            
             showFeedback(isCorrect, currentItem.correctAnswers.join(', '), function() {
+                // This is the "Try Again" callback - reshuffle and show the same item
                 reshuffleOptions(currentItem);
                 showItem(currentItem);
+                resetQuestionState();
                 isProcessingClick = false;
             });
         }
@@ -638,6 +657,7 @@ $(document).ready(function() {
                 reshuffleOptions(currentItem);
                 showItem(currentItem);
                 answerIndex = 1;
+                resetQuestionState();
                 isProcessingClick = false;
             });
             return;
@@ -645,6 +665,7 @@ $(document).ready(function() {
         const isCorrect = selectedOption === correctAnswer;
         $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
         $button.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'));
+        
         // Only play audio for incorrect answers here; correct answer audio is handled in showFeedback
         if (!isCorrect) {
             const audio = document.getElementById('audio-wrong');
@@ -657,9 +678,11 @@ $(document).ready(function() {
                 console.error('Error accessing feedback audio:', error);
             }
         }
+        
         const $questionText = $card.find('.question-text');
         let currentText = $questionText.html();
         console.log(`Handling fill-in-the-blank answer ${answerIndex}: Selected=${selectedOption}, Correct=${correctAnswer}, CurrentText=${currentText}`);
+        
         if (isCorrect) {
             // Replace the first sequence of 3+ underscores
             const underscoreRegex = /_{3,}/;
@@ -676,10 +699,12 @@ $(document).ready(function() {
                     reshuffleOptions(currentItem);
                     showItem(currentItem);
                     answerIndex = 1;
+                    resetQuestionState();
                     isProcessingClick = false;
                 });
                 return;
             }
+            
             // Check if all answers are filled
             if (answerIndex === numberOfAnswers) {
                 // All answers filled
@@ -695,6 +720,7 @@ $(document).ready(function() {
                 }
                 currentItem.is_master = currentItem.successes >= 3;
                 revisedItems.push(currentItem);
+                
                 // Update question text before showing feedback
                 $questionText.html(currentText);
                 showFeedback(true, currentItem.correctAnswers.join(', '), function() {
@@ -713,10 +739,12 @@ $(document).ready(function() {
             } else {
                 otherItems.unshift(currentItem);
             }
+            
             showFeedback(false, currentItem.correctAnswers.join(', '), function() {
                 reshuffleOptions(currentItem);
                 showItem(currentItem);
                 answerIndex = 1;
+                resetQuestionState();
                 isProcessingClick = false;
             });
         }
@@ -791,7 +819,7 @@ $(document).ready(function() {
 
     $(document).on('click', '.answer-btn', function() {
         console.log('Answer button clicked:', $(this).data('option'));
-        if (currentItem.isFillInTheBlank) {
+        if (currentItem && currentItem.isFillInTheBlank) {
             handleFillInTheBlank($(this));
         } else {
             handleAnswer($(this));
