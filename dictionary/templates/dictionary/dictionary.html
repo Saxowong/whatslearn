@@ -97,7 +97,9 @@
                                 <!-- Meaning Row -->
                                 <div class="row">
                                     <div class="col-12">
-                                        <p class="card-text" style="font-size: 1.1rem; line-height: 1.4;">{{ result.meaning }}</p>
+                                        <p class="card-text meaning-text" style="font-size: 1.1rem; line-height: 1.4;" data-full-meaning="{{ result.meaning }}">
+                                            {{ result.meaning }}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -160,7 +162,9 @@
                                 <h7 class="mb-1 fw-bold text-success">{{ word.word }}</h7>
                                 <small class="text-muted">{{ word.start_at|date:"M d" }}</small>
                             </div>
-                            <p class="mb-1 small">{{ word.meaning|truncatewords:8 }}</p>
+                            <p class="mb-1 small meaning-text" data-full-meaning="{{ word.meaning }}">
+                                {{ word.meaning }}
+                            </p>
                         </div>
                         {% endfor %}
                     </div>
@@ -296,7 +300,45 @@
 
 {% block extra_js %}
 <script>
+// Function to truncate meaning after the third comma, semicolon, or colon
+function truncateMeaning(text) {
+    if (!text) return text;
+    let count = 0;
+    let index = 0;
+    for (let i = 0; i < text.length; i++) {
+        if (text[i] === ',' || text[i] === ';' || text[i] === ':') {
+            count++;
+            if (count === 3) {
+                index = i;
+                break;
+            }
+        }
+    }
+    if (count >= 3) {
+        return text.substring(0, index).trim();
+    }
+    return text.trim();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Apply truncation to all meaning elements on page load
+    document.querySelectorAll('.meaning-text').forEach(element => {
+        const fullMeaning = element.getAttribute('data-full-meaning');
+        if (fullMeaning) {
+            const truncatedText = truncateMeaning(fullMeaning);
+            if (truncatedText !== fullMeaning.trim()) {
+                element.textContent = truncatedText;
+            }
+        } else {
+            // Fallback: use current text content if data attribute is not set
+            const originalText = element.textContent;
+            const truncatedText = truncateMeaning(originalText);
+            if (truncatedText !== originalText.trim()) {
+                element.textContent = truncatedText;
+            }
+        }
+    });
+
     const audioPlayer = document.getElementById('audio-player');
     const audioElements = new Map();
     let currentlyPlaying = null;

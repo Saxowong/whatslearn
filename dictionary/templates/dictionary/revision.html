@@ -55,16 +55,16 @@
                              data-item-id="{{ item.id }}"
                              data-item-type="{{ item.item_type }}"
                              data-item-successes="{{ item.successes|default:0 }}"
-                             data-item-correct-answer="{{ item.correct_answer|escapejs }}"
-                             data-item-correct-sequence="{{ item.correct_sequence_json|escapejs }}"
+                             data-item-correct-answer="{{ item.correct_answer|addslashes }}"
+                             data-item-correct-sequence="{{ item.correct_sequence_json }}"
                              data-item-number-answers="1"
                              data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
                              data-item-next1="{{ item.next_1|default:1 }}"
                              data-item-next2="{{ item.next_2|default:1 }}"
                              data-item-reviseat="{{ item.revise_at|default:'' }}"
                              data-item-continuerevision="{% if item.continue_revision %}true{% else %}false{% endif %}"
-                             data-item-word="{{ item.word|escapejs }}"
-                             data-item-meaning="{{ item.meaning|escapejs }}"
+                             data-item-word="{{ item.word|addslashes }}"
+                             data-item-meaning="{{ item.meaning|addslashes }}"
                              data-item-audio="{{ item.audio }}"
                              data-item-audioplay="start"
                              style="min-height: 60vh;">
@@ -97,7 +97,7 @@
                                 </div>
                                 {% for option in item.options %}
                                 <div class="col-6">
-                                    <button type="button" class="btn btn-outline-primary w-100 answer-btn" data-option="{{ option|escapejs }}">{{ option }}</button>
+                                    <button type="button" class="btn btn-outline-primary w-100 answer-btn" data-option="{{ option|addslashes }}">{{ option|truncatechars:30|safe }}</button>
                                 </div>
                                 {% endfor %}
                             </div>
@@ -221,6 +221,8 @@
 .answer-buttons button {
     white-space: normal;
     min-height: 60px;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 .feedback-buttons {
     margin-top: auto;
@@ -310,6 +312,30 @@ $(document).ready(function() {
     const MAX_ITEMS_PER_ROUND = 10;
     let isProcessingClick = false;
 
+    // Function to truncate meaning after the third comma, semicolon, or colon
+    function truncateMeaning(text) {
+        if (!text) return text;
+        let count = 0;
+        let index = 0;
+        for (let i = 0; i < text.length; i++) {
+            if (text[i] === ',' || text[i] === ';' || text[i] === ':') {
+                count++;
+                if (count === 3) {
+                    index = i;
+                    break;
+                }
+            }
+        }
+        if (count >= 3) {
+            const truncated = text.substring(0, index).trim();
+            console.log('Truncated:', { original: text, truncated: truncated });
+            return truncated;
+        }
+        const trimmed = text.trim();
+        console.log('Not truncated (fewer than 3 separators):', { original: text, trimmed: trimmed });
+        return trimmed;
+    }
+
     function shuffleArray(array) {
         if (!array || array.length <= 1) {
             console.log('shuffleArray: Array is empty or has only one item');
@@ -349,13 +375,14 @@ $(document).ready(function() {
         const now = new Date();
         $('.question-card').each(function(index) {
             const $card = $(this);
-            console.log('Processing item', index, 'ID:', $card.data('item-id'));
+            console.log('Processing item', index, 'ID:', $card.data('item-id'), 'Raw meaning:', $card.data('item-meaning'), 'Correct answer:', $card.data('item-correct-answer'));
             let correctAnswers;
             try {
                 correctAnswers = JSON.parse($card.data('item-correct-sequence') || '[]');
+                correctAnswers = correctAnswers.map(ans => ans.trim());
             } catch (e) {
                 console.error('Error parsing correct-sequence for item', $card.data('item-id'), e);
-                correctAnswers = [$card.data('item-correct-answer') || ''];
+                correctAnswers = [$card.data('item-correct-answer').trim() || ''];
             }
             const item = {
                 id: $card.data('item-id'),
@@ -363,17 +390,17 @@ $(document).ready(function() {
                 successes: parseInt($card.data('item-successes') || 0),
                 is_master: $card.data('item-is-master') === true,
                 correctAnswers: correctAnswers,
-                correctAnswer: $card.data('item-correct-answer') || '',
+                correctAnswer: $card.data('item-correct-answer').trim(),
                 numberAnswers: parseInt($card.data('item-number-answers') || 1),
                 next_1: parseInt($card.data('item-next1') || 1),
                 next_2: parseInt($card.data('item-next2') || 1),
                 revise_at: $card.data('item-reviseat') || null,
                 continue_revision: $card.data('item-continuerevision') === true,
-                word: $card.data('item-word'),
-                meaning: $card.data('item-meaning'),
+                word: $card.data('item-word').trim(),
+                meaning: $card.data('item-meaning').trim(),
                 audio_play: $card.data('item-audioplay') || 'start',
                 element: this,
-                options: $card.find('.answer-btn').map(function() { return $(this).data('option'); }).get()
+                options: $card.find('.answer-btn').map(function() { return $(this).data('option').trim(); }).get()
             };
             console.log('Item data:', item);
             if (item.revise_at && new Date(item.revise_at) <= now && item.continue_revision) {
@@ -437,10 +464,10 @@ $(document).ready(function() {
     }
 
     function showItem(item) {
-        console.log('Showing item:', item.id);
+        console.log('Showing item:', item.id, 'Word:', item.word, 'Meaning:', item.meaning);
         $('.question-card').addClass('d-none');
         $(item.element).removeClass('d-none');
-        $(item.element).find('.question-text').html(item.word);
+        $(item.element).find('.question-text').text(item.word);
         const audioElement = $(item.element).find('audio')[0];
         if (audioElement && (item.audio_play === 'start' || item.audio_play === 'both')) {
             try {
@@ -455,16 +482,20 @@ $(document).ready(function() {
     }
 
     function reshuffleOptions(item) {
-        console.log('Reshuffling options for item:', item.id);
+        console.log('Reshuffling options for item:', item.id, 'Original options:', item.options);
         const buttons = $(item.element).find('.answer-btn');
         let options = item.options.slice();
         if (options.length <= 1) {
             console.log('reshuffleOptions: Not enough options to shuffle');
             return;
         }
+        // Shuffle the original options array
         shuffleArray(options);
+        // Create display options by truncating the shuffled options
+        let displayOptions = options.map(opt => truncateMeaning(opt));
+        console.log('Shuffled options:', options, 'Display options:', displayOptions);
         buttons.each(function(index) {
-            $(this).text(options[index] || '');
+            $(this).text(displayOptions[index] || '');
             $(this).data('option', options[index] || '');
         });
     }
@@ -492,7 +523,7 @@ $(document).ready(function() {
     }
 
     function showFeedback(isCorrect, correctAnswer, onCloseCallback) {
-        console.log('Showing feedback:', isCorrect ? 'Correct' : 'Incorrect', 'Correct Answer:', correctAnswer);
+        console.log('Showing feedback:', isCorrect ? 'Correct' : 'Incorrect', 'Correct Answer:', correctAnswer, 'Meaning:', currentItem.meaning);
         const $card = $(currentItem.element);
         const $feedbackResult = $card.find('.feedback-result');
         const $feedbackAnswer = $card.find('.feedback-answer');
@@ -504,8 +535,7 @@ $(document).ready(function() {
         const feedbackAudio = isCorrect ? document.getElementById('audio-correct') : document.getElementById('audio-wrong');
         $questionElements.addClass('d-none');
         $feedbackResult.text(isCorrect ? 'Correct' : 'Incorrect').addClass(isCorrect ? 'correct' : 'incorrect').removeClass('d-none');
-        // Use the meaning directly from the item to ensure correct display
-        $correctAnswerText.text(currentItem.meaning || correctAnswer);
+        $correctAnswerText.text(truncateMeaning(currentItem.meaning || correctAnswer));
         $feedbackAnswer.removeClass('d-none');
         $feedbackButtons.removeClass('d-none');
         $card.find('.question-text').removeClass('d-none');
@@ -554,20 +584,18 @@ $(document).ready(function() {
             return;
         }
         isProcessingClick = true;
-        const selectedOption = $button.data('option');
-        const $card = $(currentItem.element);
-        const correctAnswer = currentItem.correctAnswer;
-        if (!correctAnswer) {
-            console.error('No correct answer defined for item');
-            showFeedback(false, currentItem.meaning || 'Unknown', function() {
-                reshuffleOptions(currentItem);
-                showItem(currentItem);
-                isProcessingClick = false;
-            });
-            return;
-        }
+        const selectedOption = $button.data('option').trim();
+        const correctAnswer = currentItem.correctAnswer.trim();
         const isCorrect = selectedOption === correctAnswer;
-        console.log('Handling answer:', { selectedOption: selectedOption, correctAnswer: correctAnswer, isCorrect: isCorrect });
+        console.log('Handling answer:', {
+            selectedOption: selectedOption,
+            correctAnswer: correctAnswer,
+            isCorrect: isCorrect,
+            selectedOptionLength: selectedOption.length,
+            correctAnswerLength: correctAnswer.length,
+            selectedOptionHex: selectedOption.split('').map(c => c.charCodeAt(0).toString(16)).join(' '),
+            correctAnswerHex: correctAnswer.split('').map(c => c.charCodeAt(0).toString(16)).join(' ')
+        });
         $('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
         $button.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'));
         if (isCorrect) {
@@ -626,6 +654,9 @@ $(document).ready(function() {
             success: function(response) {
                 console.log('Save progress success:', response);
                 if (response.status === 'success') {
+                    // Update the "To Revise" count in the right column
+                    $('.badge.bg-secondary').text(response.stats.remaining_items);
+                    
                     $('#itemCount').html(`There are <strong>${response.stats.remaining_items}</strong> words due for revision.`);
                     $('#revisionContainer').addClass('d-none');
                     $('#welcomeBlock').removeClass('d-none');

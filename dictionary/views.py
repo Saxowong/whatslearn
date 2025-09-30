@@ -240,14 +240,12 @@ def save_word(request):
 @login_required
 def dictionary_revision(request):
     user = request.user.profile
-    # Get the count of words due for revision
     revision_items_count = StudentWord.objects.filter(
         student=user,
         revise_at__lte=timezone.now(),
         continue_revision=True,
     ).count()
 
-    # Get items due for revision first
     due_items = (
         StudentWord.objects.filter(
             student=user,
@@ -268,7 +266,6 @@ def dictionary_revision(request):
         .order_by("revise_at")
     )
 
-    # If less than 10 due items, get additional items with fewest successes
     items = list(due_items)
     if len(items) < 10:
         remaining_count = 10 - len(items)
@@ -293,7 +290,6 @@ def dictionary_revision(request):
         )
         items.extend(additional_items)
 
-    # Prepare revision items with options
     revision_items = []
     all_meanings = list(
         StudentWord.objects.filter(student=user)
@@ -302,7 +298,6 @@ def dictionary_revision(request):
     )
 
     for item in items:
-        # Generate audio URL
         word_lower = item["word"].lower()
         first_letter = word_lower[0] if word_lower else ""
         audio_url = (
@@ -311,10 +306,8 @@ def dictionary_revision(request):
             else None
         )
 
-        # Generate multiple-choice options
         correct_answer = item["meaning"]
         options = [correct_answer]
-        # Select up to 3 distractors from other words' meanings
         other_meanings = [m for m in all_meanings if m != correct_answer]
         distractors = (
             random.sample(other_meanings, min(3, len(other_meanings)))
@@ -322,14 +315,13 @@ def dictionary_revision(request):
             else []
         )
         options.extend(distractors)
-        # Pad with generic options if needed
         while len(options) < 4:
             options.append(f"Option {len(options)}")
         random.shuffle(options)
 
         item_data = {
             "id": item["id"],
-            "item_type": "mc",  # Treat as multiple-choice
+            "item_type": "mc",
             "word": item["word"],
             "meaning": item["meaning"],
             "successes": item["successes"],
@@ -340,7 +332,7 @@ def dictionary_revision(request):
             "continue_revision": item["continue_revision"],
             "options": options,
             "correct_answer": correct_answer,
-            "correct_sequence_json": json.dumps([correct_answer]),
+            "correct_sequence_json": json.dumps([correct_answer], ensure_ascii=False),
             "audio": audio_url,
             "audio_play": "start",
         }
