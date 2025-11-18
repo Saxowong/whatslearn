@@ -117,19 +117,27 @@ class UserEnrolledCoursesAPIView(generics.ListAPIView):
 def student_course_view(request):
     user = request.user.profile
 
-    first_course_activity_subquery = Activity.objects.filter(
-        lesson__course=OuterRef("course")
-    ).order_by("id").values("id")[:1]
+    first_course_activity_subquery = (
+        Activity.objects.filter(lesson__course=OuterRef("course"))
+        .order_by("id")
+        .values("id")[:1]
+    )
 
-    latest_student_activity_subquery = StudentActivity.objects.filter(
-        student=user,
-        activity__lesson__course=OuterRef("course")
-    ).order_by("-updated_at").values("activity_id")[:1]
+    latest_student_activity_subquery = (
+        StudentActivity.objects.filter(
+            student=user, activity__lesson__course=OuterRef("course")
+        )
+        .order_by("-updated_at")
+        .values("activity_id")[:1]
+    )
 
-    first_student_activity_subquery = StudentActivity.objects.filter(
-        student=user,
-        activity__lesson__course=OuterRef("course")
-    ).order_by("updated_at").values("activity_id")[:1]
+    first_student_activity_subquery = (
+        StudentActivity.objects.filter(
+            student=user, activity__lesson__course=OuterRef("course")
+        )
+        .order_by("updated_at")
+        .values("activity_id")[:1]
+    )
 
     enrollments = (
         StudentCourse.objects.filter(student=user)
@@ -182,12 +190,12 @@ def student_course_view(request):
             latest_activity_id=Coalesce(
                 Subquery(latest_student_activity_subquery, output_field=IntegerField()),
                 Subquery(first_course_activity_subquery, output_field=IntegerField()),
-                output_field=IntegerField()
+                output_field=IntegerField(),
             ),
             first_activity_id=Coalesce(
                 Subquery(first_student_activity_subquery, output_field=IntegerField()),
                 Subquery(first_course_activity_subquery, output_field=IntegerField()),
-                output_field=IntegerField()
+                output_field=IntegerField(),
             ),
         )
         .order_by("-updated_at")
@@ -203,12 +211,12 @@ def available_courses_view(request):
     user = request.user.profile
 
     # Get all courses NOT enrolled by the user and are published
-    unenrolled_courses = Course.objects.exclude(
-        id__in=StudentCourse.objects.filter(student=user).values("course_id")
-    ).filter(
-        is_published=True
-    ).order_by(
-        "-created_at"
+    unenrolled_courses = (
+        Course.objects.exclude(
+            id__in=StudentCourse.objects.filter(student=user).values("course_id")
+        )
+        .filter(is_published=True)
+        .order_by("-created_at")
     )  # Order by newest first
 
     context = {"courses": unenrolled_courses}
@@ -303,9 +311,7 @@ def revision_view(request, course_id):
                 item__activity__lesson__course=course,
                 continue_revision=True,
             )
-            .exclude(
-                id__in=[item["id"] for item in items]
-            )
+            .exclude(id__in=[item["id"] for item in items])
             .select_related("item__activity")
             .values(
                 "id",
@@ -332,7 +338,7 @@ def revision_view(request, course_id):
             .order_by("successes", "id")[:remaining_count]
         )
         items.extend(additional_items)
-    
+
     course.revision_items = []
     for item in items:
         # Collect answer options
@@ -342,12 +348,14 @@ def revision_view(request, course_id):
         if item["item__item_type"] == "blank":
             # Only include non-empty answers from answer1 to answer4
             answers = [
-                ans for ans in [
+                ans
+                for ans in [
                     item["item__answer1"],
                     item["item__answer2"],
                     item["item__answer3"],
-                    item["item__answer4"]
-                ] if ans and ans.strip()
+                    item["item__answer4"],
+                ]
+                if ans and ans.strip()
             ]
             options = answers
             correct_answer = item["item__answer1"] or ""  # Fallback for blank items
@@ -357,10 +365,7 @@ def revision_view(request, course_id):
             # For flash cards, include the correct answer plus distractors from the same activity
             activity_id = item["item__activity_id"]
             wrong_answers = (
-                Item.objects.filter(
-                    activity_id=activity_id,
-                    item_type="card"
-                )
+                Item.objects.filter(activity_id=activity_id, item_type="card")
                 .exclude(id=item["item__id"])
                 .exclude(answer__isnull=True)
                 .values_list("answer", flat=True)
@@ -370,7 +375,8 @@ def revision_view(request, course_id):
             wrong_answers = (
                 wrong_answers[:3]
                 if len(wrong_answers) >= 3
-                else wrong_answers + ["Option " + str(i) for i in range(1, 4 - len(wrong_answers) + 1)]
+                else wrong_answers
+                + ["Option " + str(i) for i in range(1, 4 - len(wrong_answers) + 1)]
             )
             options = [item["item__answer"]] + wrong_answers
             correct_answer = item["item__answer"] or ""
@@ -379,15 +385,19 @@ def revision_view(request, course_id):
         elif item["item__item_type"] == "mc":
             # For multiple-choice, include answer1 to answer4
             answers = [
-                ans for ans in [
+                ans
+                for ans in [
                     item["item__answer1"],
                     item["item__answer2"],
                     item["item__answer3"],
-                    item["item__answer4"]
-                ] if ans and ans.strip()
+                    item["item__answer4"],
+                ]
+                if ans and ans.strip()
             ]
             options = answers
-            correct_answer = item["item__answer"] or ""  # Use item__answer as the correct answer
+            correct_answer = (
+                item["item__answer"] or ""
+            )  # Use item__answer as the correct answer
             correct_sequence = [correct_answer]
             shuffle(options)
 
@@ -431,6 +441,7 @@ def revision_view(request, course_id):
         "first_course": course,
     }
     return render(request, "course/revision.html", context)
+
 
 @login_required
 @require_POST
@@ -569,6 +580,7 @@ def submit_revision(request, course_id):
             status=500,
         )
 
+
 @login_required
 def course_view(request, course_id):
     student_profile = request.user.profile
@@ -627,18 +639,18 @@ def course_view(request, course_id):
                 .values("student")
                 .annotate(count=Count("id"))
                 .values("count")[:1],
-                output_field=IntegerField()
+                output_field=IntegerField(),
             ),
             activities_completed=Subquery(
                 StudentActivity.objects.filter(
                     student=student_profile,
                     activity__lesson__course=OuterRef("pk"),
-                    completed=True
+                    completed=True,
                 )
                 .values("student")
                 .annotate(count=Count("id"))
                 .values("count")[:1],
-                output_field=IntegerField()
+                output_field=IntegerField(),
             ),
         ),
         id=course_id,
@@ -676,6 +688,7 @@ def course_view(request, course_id):
         },
     )
 
+
 @login_required
 def activity_view(request, activity_id):
     # Get the activity and verify course enrollment
@@ -691,8 +704,7 @@ def activity_view(request, activity_id):
         raise PermissionDenied("You are not enrolled in this course")
     # Get ALL activities in the course in lesson-order + activity-order
     all_activities = (
-        Activity.objects
-        .filter(lesson__course=course)
+        Activity.objects.filter(lesson__course=course)
         .select_related("lesson")
         .annotate(
             student_progress=Coalesce(
@@ -712,7 +724,7 @@ def activity_view(request, activity_id):
                 ),
                 False,
                 output_field=BooleanField(),
-            )
+            ),
         )
         .order_by("lesson__order", "order")
     )
@@ -784,37 +796,84 @@ def activity_view(request, activity_id):
             item.updated_at = student_item.updated_at if student_item else None
             item.next_1 = student_item.next_1 if student_item else 1
             item.next_2 = student_item.next_2 if student_item else 1
-            item.audio_play = item.audio_play or 'start'
-            logger.debug(f"Processing item ID: {item.id}, Type: {item.item_type}, Question: {item.question}, Audio Play: {item.audio_play}, Number Answers: {item.number_answers}")
-            logger.debug(f"Answers: answer1={getattr(item, 'answer1', None)}, answer2={getattr(item, 'answer2', None)}, answer3={getattr(item, 'answer3', None)}, answer4={getattr(item, 'answer4', None)}")
+            item.audio_play = item.audio_play or "start"
+            # Generate audio URL from question title if no audio file exists
+            if not item.audio and item.title:
+                # Assume question contains the title (e.g., "cat")
+                # Strip HTML tags and get first word for simplicity
+                from django.utils.html import strip_tags
+
+                question_text = strip_tags(item.title).strip().lower()
+                # Take the first word of the question as the title
+                title = question_text.split()[0] if question_text else ""
+                if title:
+                    # Construct URL: http://127.0.0.1:8000/media/mp3/c/cat.mp3
+                    item.audio_url = (
+                        f"http://127.0.0.1:8000/media/mp3/{title[0]}/{title}.mp3"
+                    )
+                else:
+                    item.audio_url = ""
+            else:
+                item.audio_url = item.audio.url if item.audio else ""
+            logger.debug(
+                f"Processing item ID: {item.id}, Type: {item.item_type}, Question: {item.question}, Audio Play: {item.audio_play}, Number Answers: {item.number_answers}, Audio URL: {item.audio_url}"
+            )
+            logger.debug(
+                f"Answers: answer1={getattr(item, 'answer1', None)}, answer2={getattr(item, 'answer2', None)}, answer3={getattr(item, 'answer3', None)}, answer4={getattr(item, 'answer4', None)}"
+            )
             if item.item_type == "mc":
-                options = [getattr(item, 'answer1', ''), getattr(item, 'answer2', ''), getattr(item, 'answer3', ''), getattr(item, 'answer4', '')]
-                options = [opt for opt in options if opt and opt.strip() != '']
+                options = [
+                    getattr(item, "answer1", ""),
+                    getattr(item, "answer2", ""),
+                    getattr(item, "answer3", ""),
+                    getattr(item, "answer4", ""),
+                ]
+                options = [opt for opt in options if opt and opt.strip() != ""]
                 shuffle(options)
                 item.options = options
-                item.correct_answer = item.answer or ''
+                item.correct_answer = item.answer or ""
                 item.correct_sequence_json = json.dumps([])
                 item.number_answers = 0
-                logger.debug(f"MC Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}")
+                logger.debug(
+                    f"MC Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}"
+                )
             elif item.item_type == "blank":
                 # Use number_answers from the item
                 question_blanks = item.number_answers or 0
                 if question_blanks < 1 or question_blanks > 4:
-                    logger.error(f"Item ID: {item.id} has invalid blank count: {question_blanks}")
+                    logger.error(
+                        f"Item ID: {item.id} has invalid blank count: {question_blanks}"
+                    )
                     item.correct_sequence = []
                     item.options = []
                     item.correct_sequence_json = json.dumps([])
                     item.number_answers = 0
                     continue
                 # Collect correct answers based on number_answers
-                correct_sequence = [str(getattr(item, f'answer{i}', '')) for i in range(1, question_blanks + 1) if getattr(item, f'answer{i}', '') and str(getattr(item, f'answer{i}', '')).strip()]
+                correct_sequence = [
+                    str(getattr(item, f"answer{i}", ""))
+                    for i in range(1, question_blanks + 1)
+                    if getattr(item, f"answer{i}", "")
+                    and str(getattr(item, f"answer{i}", "")).strip()
+                ]
                 if len(correct_sequence) != question_blanks:
-                    logger.warning(f"Item ID: {item.id} has {question_blanks} blanks but {len(correct_sequence)} valid answers: {correct_sequence}")
-                    correct_sequence.extend(['MISSING_ANSWER'] * (question_blanks - len(correct_sequence)))
+                    logger.warning(
+                        f"Item ID: {item.id} has {question_blanks} blanks but {len(correct_sequence)} valid answers: {correct_sequence}"
+                    )
+                    item.correct_sequence = []
+                    item.options = []
+                    item.correct_sequence_json = json.dumps([])
+                    item.number_answers = 0
+                    continue
                 # Generate options: correct answers (answer1 to answerN) plus distractors (answer{N+1} to answer4)
                 options = correct_sequence.copy()
                 # Add distractors from answer{N+1} to answer4
-                distractors = [str(getattr(item, f'answer{i}', '')) for i in range(question_blanks + 1, 5) if getattr(item, f'answer{i}', '') and str(getattr(item, f'answer{i}', '')).strip()]
+                distractors = [
+                    str(getattr(item, f"answer{i}", ""))
+                    for i in range(question_blanks + 1, 5)
+                    if getattr(item, f"answer{i}", "")
+                    and str(getattr(item, f"answer{i}", "")).strip()
+                ]
                 num_distractors_needed = max(0, 4 - len(options))
                 # Add distractors from other items if needed
                 if len(distractors) < num_distractors_needed:
@@ -822,43 +881,71 @@ def activity_view(request, activity_id):
                     for i in items:
                         if i.id != item.id:
                             for j in range(1, 5):
-                                ans = getattr(i, f'answer{j}', '')
-                                if ans and ans.strip() and ans not in correct_sequence and ans not in distractors:
+                                ans = getattr(i, f"answer{j}", "")
+                                if (
+                                    ans
+                                    and ans.strip()
+                                    and ans not in correct_sequence
+                                    and ans not in distractors
+                                ):
                                     other_answers.append(ans)
-                    other_distractors = sample(other_answers, min(num_distractors_needed - len(distractors), len(other_answers)))
+                    other_distractors = sample(
+                        other_answers,
+                        min(
+                            num_distractors_needed - len(distractors),
+                            len(other_answers),
+                        ),
+                    )
                     distractors.extend(other_distractors)
                 # Fill remaining slots with generic distractors
                 if len(distractors) < num_distractors_needed:
-                    distractors.extend([f"Option {i}" for i in range(1, num_distractors_needed - len(distractors) + 1)])
+                    distractors.extend(
+                        [
+                            f"Option {i}"
+                            for i in range(
+                                1, num_distractors_needed - len(distractors) + 1
+                            )
+                        ]
+                    )
                 options.extend(distractors[:num_distractors_needed])
                 shuffle(options)
                 item.options = options
-                item.correct_answer = ''
+                item.correct_answer = ""
                 item.correct_sequence = correct_sequence
                 try:
                     item.correct_sequence_json = json.dumps(correct_sequence)
                 except (TypeError, ValueError) as e:
-                    logger.error(f"JSON serialization failed for item ID: {item.id}, Correct Sequence: {correct_sequence}, Error: {e}")
+                    logger.error(
+                        f"JSON serialization failed for item ID: {item.id}, Correct Sequence: {correct_sequence}, Error: {e}"
+                    )
                     item.correct_sequence_json = json.dumps([])
                 item.number_answers = question_blanks
-                logger.debug(f"Blank Item ID: {item.id}, Blanks: {question_blanks}, Options: {item.options}, Correct Sequence: {correct_sequence}, JSON: {item.correct_sequence_json}")
+                logger.debug(
+                    f"Blank Item ID: {item.id}, Blanks: {question_blanks}, Options: {item.options}, Correct Sequence: {correct_sequence}, JSON: {item.correct_sequence_json}"
+                )
             else:
                 # For card
                 wrong_answers = [
-                    i.answer for i in items if i.id != item.id and i.answer and i.answer != item.answer
+                    i.answer
+                    for i in items
+                    if i.id != item.id and i.answer and i.answer != item.answer
                 ]
                 if len(wrong_answers) < 3:
                     wrong_answers.extend(
-                        ["Alternative option 1", "Alternative option 2"][: 3 - len(wrong_answers)]
+                        ["Alternative option 1", "Alternative option 2"][
+                            : 3 - len(wrong_answers)
+                        ]
                     )
                 selected_wrong = sample(wrong_answers, 3)
-                options = [item.answer or ''] + selected_wrong
+                options = [item.answer or ""] + selected_wrong
                 shuffle(options)
                 item.options = options
-                item.correct_answer = item.answer or ''
+                item.correct_answer = item.answer or ""
                 item.correct_sequence_json = json.dumps([])
                 item.number_answers = 0
-                logger.debug(f"Card Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}")
+                logger.debug(
+                    f"Card Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}"
+                )
         context["items"] = items
         template_name = "course/exercise_activity.html"
     elif activity.activity_type == "video":
@@ -868,6 +955,7 @@ def activity_view(request, activity_id):
     else:
         template_name = "course/html_activity.html"
     return render(request, template_name, context)
+
 
 @require_POST
 @login_required

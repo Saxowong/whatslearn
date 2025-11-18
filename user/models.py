@@ -9,7 +9,12 @@ from django.utils import timezone
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
-    picture = models.ImageField(upload_to="profile_pictures/", default="profile_pictures/dummy.png", null=True, blank=True)
+    picture = models.ImageField(
+        upload_to="profile_pictures/",
+        default="profile_pictures/dummy.png",
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     last_login_at = models.DateTimeField(null=True, blank=True)

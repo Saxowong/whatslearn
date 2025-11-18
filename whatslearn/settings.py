@@ -12,10 +12,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -28,30 +28,32 @@ DEBUG = True
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
-#
+
 LOGIN_URL = "/login"  # e.g., '/login/'
 LOGIN_REDIRECT_URL = "/courses"  # Where to go after successful login
 
 ALLOWED_HOSTS = ["127.0.0.1", "whatslearn.com"]
 
-# Application definition
-
-INSTALLED_APPS = [
-    "widget_tweaks",
-    "user.apps.UserConfig",
-    "course.apps.CourseConfig",
-    "import_export",
-    "dictionary.apps.DictionaryConfig",
-    "teacher.apps.TeacherConfig",  # Or "teacher" if no TeacherConfig
-    "rest_framework",
-    "tinymce",
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
+CORS_ALLOWED_ORIGINS = [
+    "http://10.0.2.2:8000",  # For Android emulator
+    "http://127.0.0.1:8000",  # For iOS simulator
 ]
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=2),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+}
 
 TINYMCE_DEFAULT_CONFIG = {
     "height": 360,
@@ -72,7 +74,8 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
+    "api.middleware.CustomCsrfMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -101,12 +104,6 @@ WSGI_APPLICATION = "whatslearn.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.sqlite3",
-#         "NAME": BASE_DIR / "db.sqlite3",
-#     }
-# }
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
@@ -122,7 +119,27 @@ DATABASES = {
         },
     }
 }
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Application definition
+INSTALLED_APPS = [
+    "django.contrib.contenttypes",  # Added for ContentType model
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "widget_tweaks",
+    "user.apps.UserConfig",
+    "course.apps.CourseConfig",
+    "import_export",
+    "dictionary.apps.DictionaryConfig",
+    "teacher.apps.TeacherConfig",
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "api",
+    "corsheaders",
+    "tinymce",
+]
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -141,10 +158,6 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
-
-
-# Set the default language code to English (United States)
-# settings.py
 
 # Enable localization
 USE_I18N = True
@@ -166,13 +179,11 @@ LOCALE_PATHS = [
     BASE_DIR / "locale",  # Adjust BASE_DIR as needed
 ]
 
-
 TIME_ZONE = "Asia/Hong_Kong"  # Set your desired timezone
 
 USE_I18N = True
 
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -183,7 +194,6 @@ STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

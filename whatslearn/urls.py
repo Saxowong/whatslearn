@@ -26,6 +26,8 @@ from django.contrib.auth import (
 from django.conf.urls.static import static
 from django.views.static import serve
 from user.views import logout_view, login_view
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
 
 from course.views import (
     UserProfileAPIView,
@@ -59,6 +61,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("register", views.register_view, name="register"),
     path("dictionary/", include("dictionary.urls")),
+    path("api/", include("api.urls")),  # Includes API routes
     path("logout", logout_view, name="logout"),
     path("login", login_view, name="login"),
     path("course/", include("course.urls")),  # Updated to course.urls
