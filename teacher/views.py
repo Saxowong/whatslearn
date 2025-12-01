@@ -4,12 +4,13 @@ from django.db.models import Count, Max, Q
 from django.db import transaction, models
 import course
 from course.models import Course, Category, Lesson, Activity, Item, StudentCourse
+from dictionary.models import DictionaryItem
 from django.contrib import messages
 from user.models import Profile
 from django.urls import reverse
 from django.http import HttpResponse, HttpResponseRedirect
 from django.conf import settings
-from .forms import CourseForm, LessonForm, ActivityForm, ItemForm, ItemImportForm
+from .forms import CourseForm, LessonForm, ActivityForm, ItemForm
 import os, zipfile
 import tempfile
 from io import TextIOWrapper
@@ -28,19 +29,24 @@ def manage_courses(request):
         Course.objects.filter(teacher__user=request.user)
         .select_related("teacher__user", "category")  # Only for fields used in template
         .annotate(
-            lesson_count=Count("lessons", distinct=True),  # Use distinct to avoid join inflation
-            enrollment_count=Count("student_courses", distinct=True)
+            lesson_count=Count(
+                "lessons", distinct=True
+            ),  # Use distinct to avoid join inflation
+            enrollment_count=Count("student_courses", distinct=True),
         )
     )
     # Debug: Log counts for verification
     for course in courses:
-        print(f"Course: {course.title}, Lessons: {course.lesson_count}, Raw Lessons: {course.lessons.count()}, "
-              f"Enrollments: {course.enrollment_count}, Raw Enrollments: {course.student_courses.count()}")
+        print(
+            f"Course: {course.title}, Lessons: {course.lesson_count}, Raw Lessons: {course.lessons.count()}, "
+            f"Enrollments: {course.enrollment_count}, Raw Enrollments: {course.student_courses.count()}"
+        )
     context = {
         "courses": courses,
         "categories": Category.objects.all(),
     }
     return render(request, "teacher/manage_courses.html", context)
+
 
 @login_required
 def manage_learners(request, course_id):
@@ -48,7 +54,7 @@ def manage_learners(request, course_id):
     course = get_object_or_404(
         Course.objects.select_related("teacher", "category"),
         id=course_id,
-        teacher__user=request.user
+        teacher__user=request.user,
     )
     # Fetch enrolled students with annotations for course count and activities completed
     students = (
@@ -60,9 +66,9 @@ def manage_learners(request, course_id):
                 "student__student_activities",
                 filter=Q(
                     student__student_activities__completed=True,
-                    student__student_activities__activity__lesson__course__id=course.id
-                )
-            )
+                    student__student_activities__activity__lesson__course__id=course.id,
+                ),
+            ),
         )
     )
     context = {
@@ -70,6 +76,7 @@ def manage_learners(request, course_id):
         "students": students,
     }
     return render(request, "teacher/manage_learners.html", context)
+
 
 @login_required
 def edit_course(request, course_id=0):
@@ -399,6 +406,7 @@ def manage_activities(request, lesson_id):
     }
     return render(request, "teacher/manage_activities.html", context)
 
+
 @login_required
 def edit_activity(request, lesson_id, activity_id=0):
     lesson = get_object_or_404(Lesson, id=lesson_id, course__teacher__user=request.user)
@@ -415,7 +423,10 @@ def edit_activity(request, lesson_id, activity_id=0):
             activity.save()  # Save to generate activity.id for pdf_media_path
 
             # Handle PDF file upload for pdf activities
-            if form.cleaned_data['activity_type'] == 'pdf' and "pdf_file" in request.FILES:
+            if (
+                form.cleaned_data["activity_type"] == "pdf"
+                and "pdf_file" in request.FILES
+            ):
                 old_pdf_path = activity.pdf_file.path if activity.pdf_file else None
                 if old_pdf_path and os.path.exists(old_pdf_path):
                     try:
@@ -431,13 +442,17 @@ def edit_activity(request, lesson_id, activity_id=0):
                 activity.pdf_file.save(os.path.join(media_path, filename), pdf_file)
 
             # Log HTML content for exercise activities
-            if form.cleaned_data['activity_type'] == 'html':
-                logger.info(f"Saving html_content for activity {activity.id or 'new'}: {form.cleaned_data['html_content'][:100]}...")
+            if form.cleaned_data["activity_type"] == "html":
+                logger.info(
+                    f"Saving html_content for activity {activity.id or 'new'}: {form.cleaned_data['html_content'][:100]}..."
+                )
 
             activity.save()
 
             # Resequence orders after saving
-            activities = Activity.objects.filter(lesson=lesson).order_by("order", "created_at")
+            activities = Activity.objects.filter(lesson=lesson).order_by(
+                "order", "created_at"
+            )
             for index, act in enumerate(activities, start=1):
                 act.order = index
                 act.save()
@@ -461,6 +476,7 @@ def edit_activity(request, lesson_id, activity_id=0):
             "activity_types": Activity.ACTIVITY_TYPES,
         },
     )
+
 
 @login_required
 def delete_activity(request, activity_id):
@@ -569,7 +585,7 @@ def edit_item(request, activity_id, item_id):
             item = form.save(commit=False)
             item.activity = activity
             # Set number_answers based on item_type
-            if item.item_type in ['mc', 'card']:
+            if item.item_type in ["mc", "card"]:
                 item.number_answers = 1
             # For 'blank' items, number_answers is set by the form (based on blanks)
             # Handle file uploads
@@ -615,9 +631,16 @@ def edit_item(request, activity_id, item_id):
             error = "Please correct the errors below"
     else:
         initial = (
-            {"order": Item.objects.filter(activity=activity).count() + 1, "number_answers": 1}
+            {
+                "order": Item.objects.filter(activity=activity).count() + 1,
+                "number_answers": 1,
+            }
             if not item
-            else {"number_answers": 1 if item.item_type in ['mc', 'card'] else item.number_answers}
+            else {
+                "number_answers": (
+                    1 if item.item_type in ["mc", "card"] else item.number_answers
+                )
+            }
         )
         form = ItemForm(instance=item, initial=initial)
         error = None
@@ -632,7 +655,6 @@ def edit_item(request, activity_id, item_id):
             "form": form,
         },
     )
-
 
 
 @login_required
@@ -698,10 +720,11 @@ def find_file_in_directory(directory, filename):
             return os.path.join(root, filename)
     return None
 
+
 def save_media_file(src_path, dest_dir, media_path, filename):
     os.makedirs(dest_dir, exist_ok=True)
     dest_path = os.path.join(dest_dir, filename)
-    with open(src_path, 'rb') as src, open(dest_path, 'wb') as dest:
+    with open(src_path, "rb") as src, open(dest_path, "wb") as dest:
         dest.write(src.read())
     return os.path.join(media_path, filename)
 
@@ -709,6 +732,7 @@ def save_media_file(src_path, dest_dir, media_path, filename):
 def import_items(request, activity_id):
     activity = get_object_or_404(Activity, id=activity_id)
     course = activity.lesson.course
+
     if request.method == "POST":
         zip_file = request.FILES.get("zip_file")
         if not zip_file:
@@ -716,141 +740,218 @@ def import_items(request, activity_id):
             return redirect("teacher:manage_items", activity_id=activity.id)
 
         try:
-            # Create temporary directory
             with tempfile.TemporaryDirectory() as temp_dir:
-                # Save uploaded zip to temp location
                 zip_path = os.path.join(temp_dir, "upload.zip")
                 with open(zip_path, "wb+") as destination:
                     for chunk in zip_file.chunks():
                         destination.write(chunk)
 
-                # Extract ZIP contents
                 with zipfile.ZipFile(zip_path, "r") as z:
                     z.extractall(temp_dir)
 
-                # Find Excel file in extracted contents
                 excel_files = [
-                    f for f in os.listdir(temp_dir)
-                    if f.lower().startswith("items.") and f.lower().endswith((".xls", ".xlsx"))
+                    f
+                    for f in os.listdir(temp_dir)
+                    if f.lower().startswith("items.")
+                    and f.lower().endswith((".xls", ".xlsx"))
                 ]
                 if not excel_files:
-                    messages.error(request, "No items.xls or items.xlsx found in ZIP file")
+                    messages.error(
+                        request, "No items.xls or items.xlsx found in ZIP file"
+                    )
                     return redirect("teacher:manage_items", activity_id=activity.id)
 
-                # Process first Excel file found
                 excel_path = os.path.join(temp_dir, excel_files[0])
                 df = pd.read_excel(excel_path)
 
-                # Validate required columns
-                required_columns = ["title", "item_type", "item_category", "question", "answer"]
+                required_columns = [
+                    "title",
+                    "item_type",
+                    "item_category",
+                    "question",
+                    "answer",
+                ]
                 for col in required_columns:
                     if col not in df.columns:
                         messages.error(request, f"Missing required column: {col}")
                         return redirect("teacher:manage_items", activity_id=activity.id)
 
-                # Create media directory if needed
                 media_path = os.path.join("courses", str(course.id), str(activity.id))
                 full_media_path = os.path.join(settings.MEDIA_ROOT, media_path)
                 os.makedirs(full_media_path, exist_ok=True)
 
-                # Get current max order value from existing items
-                current_max_order = Item.objects.filter(activity=activity).aggregate(Max("order"))["order__max"] or 0
+                current_max_order = (
+                    Item.objects.filter(activity=activity).aggregate(Max("order"))[
+                        "order__max"
+                    ]
+                    or 0
+                )
                 next_order = current_max_order + 1
-
-                # Valid item types
                 valid_item_types = [choice[0] for choice in Item.ITEM_TYPES]
 
-                # Process each row
                 success_count = 0
                 for _, row in df.iterrows():
                     try:
                         item_type = str(row["item_type"]).strip().lower()
                         if item_type not in valid_item_types:
-                            messages.error(request, f"Invalid item_type '{item_type}' for item '{row['title']}'")
+                            messages.error(
+                                request,
+                                f"Invalid item_type '{item_type}' for item '{row['title']}'",
+                            )
                             continue
 
-                        # Initialize item fields
+                        title = str(row["title"]).strip()
+                        question = (
+                            str(row["question"]).strip()
+                            if pd.notna(row["question"])
+                            else ""
+                        )
+                        answer = (
+                            str(row["answer"]).strip()
+                            if pd.notna(row["answer"])
+                            else ""
+                        )
+
+                        # --- Special Handling for Flashcards (card type) ---
+                        # --- Special Handling for Flashcards (card type) ---
+                        if item_type == "card":
+                            if not answer and question:
+                                try:
+                                    dictionary_entry = DictionaryItem.objects.filter(
+                                        word__iexact=question.strip()
+                                    ).first()
+
+                                    if dictionary_entry:
+                                        raw_meaning = dictionary_entry.meaning.strip()
+
+                                        # Split by comma (,) or semicolon (;)
+                                        parts = [
+                                            p.strip()
+                                            for p in re.split(r"[;,]", raw_meaning)
+                                        ]
+                                        # Remove any empty parts and take only first 3
+                                        clean_parts = [p for p in parts if p][:3]
+
+                                        # Rejoin with comma and space
+                                        answer = ", ".join(clean_parts)
+
+                                        # Optional: Clean up common prefixes like "C", "U" if you want
+                                        # For now, keeping them as they are part of the meaning
+                                        # Example: "C兔" → remains "C兔" (or you can strip below)
+
+                                    else:
+                                        messages.warning(
+                                            request,
+                                            f"No dictionary meaning found for word: '{question}' in '{title}'",
+                                        )
+                                except Exception as e:
+                                    messages.warning(
+                                        request,
+                                        f"Error retrieving dictionary meaning for '{question}': {str(e)}",
+                                    )
+                            # If answer was provided in Excel, use that instead
+                            # (no change needed — already handled above)
+
                         item_data = {
                             "activity": activity,
-                            "title": str(row["title"]),
+                            "title": title,
                             "item_type": item_type,
-                            "item_category": str(row["item_category"]) if pd.notna(row["item_category"]) else "",
+                            "item_category": (
+                                str(row["item_category"])
+                                if pd.notna(row["item_category"])
+                                else ""
+                            ),
                             "order": next_order,
-                            "answer": str(row["answer"]) if pd.notna(row["answer"]) else "",
+                            "question": question,
+                            "answer": answer,  # May now be auto-filled
+                            "number_answers": 1,
                         }
 
-                        # Handle answer1 to answer4 if provided
+                        # Handle answer1–answer4 for MC or blank
                         answer_columns = ["answer1", "answer2", "answer3", "answer4"]
                         if all(col in df.columns for col in answer_columns):
                             for i, col in enumerate(answer_columns, 1):
                                 if pd.notna(row.get(col)):
                                     item_data[f"answer{i}"] = str(row[col]).strip()
 
-                        # Handle fill-in-the-blank questions
+                        # Handle fill-in-the-blank
                         if item_type == "blank":
-                            question = str(row["question"]) if pd.notna(row["question"]) else ""
-                            # Find sequences of 3 or more underscores and replace with exactly 4
-                            question = re.sub(r'_{3,}', '____', question)
-                            item_data["question"] = question
-                            # Count number of blanks
-                            blanks = len(re.findall(r'____', question))
+                            question_text = item_data["question"]
+                            question_text = re.sub(r"_{3,}", "____", question_text)
+                            item_data["question"] = question_text
+                            blanks = len(re.findall(r"____", question_text))
                             item_data["number_answers"] = blanks if blanks > 0 else 1
-                            # Ensure answer is stored (comma-separated for multiple blanks)
-                            if pd.notna(row["answer"]):
-                                item_data["answer"] = str(row["answer"]).strip()
 
-                        # Handle multiple choice questions
+                        # Handle multiple choice
                         elif item_type == "mc":
-                            # Validate answer columns
                             if not all(col in df.columns for col in answer_columns):
-                                messages.error(request, f"Missing answer columns for MC item '{row['title']}'")
+                                messages.error(
+                                    request,
+                                    f"Missing answer columns for MC item '{title}'",
+                                )
                                 continue
                             if not all(pd.notna(row[col]) for col in answer_columns):
-                                messages.error(request, f"MC item '{row['title']}' must have all four answers")
+                                messages.error(
+                                    request,
+                                    f"MC item '{title}' must have all four answers",
+                                )
                                 continue
-                            item_data["question"] = str(row["question"])
-                            item_data["number_answers"] = 1  # Set to 1 for mc items
-                            item_data["answer1"] = str(row["answer1"])
-                            item_data["answer2"] = str(row["answer2"])
-                            item_data["answer3"] = str(row["answer3"])
-                            item_data["answer4"] = str(row["answer4"])
-                            # Verify the answer is one of the provided options
-                            if pd.notna(row["answer"]) and item_data["answer"] not in [item_data[f"answer{i+1}"] for i in range(4)]:
-                                messages.error(request, f"Correct answer for MC item '{row['title']}' must match one of answer1-4")
-                                continue
-
-                        # Handle flash card (card) items
-                        else:
-                            item_data["question"] = str(row["question"])
-                            item_data["number_answers"] = 1  # Already set to 1
+                            item_data["number_answers"] = 1
                             if pd.notna(row["answer"]):
-                                item_data["answer"] = str(row["answer"]).strip()
+                                correct = str(row["answer"]).strip()
+                                if correct not in [
+                                    item_data.get(f"answer{i+1}", "") for i in range(4)
+                                ]:
+                                    messages.error(
+                                        request,
+                                        f"Correct answer not in options for MC item '{title}'",
+                                    )
+                                    continue
 
                         # Create item
                         item = Item(**item_data)
 
-                        # Handle image file if exists
-                        if "image_filename" in df.columns and pd.notna(row.get("image_filename")):
-                            img_filename = str(row["image_filename"])
+                        # Handle image
+                        if "image_filename" in df.columns and pd.notna(
+                            row.get("image_filename")
+                        ):
+                            img_filename = str(row["image_filename"]).strip()
                             img_path = find_file_in_directory(temp_dir, img_filename)
                             if img_path:
-                                item.image = save_media_file(img_path, full_media_path, media_path, img_filename)
+                                item.image = save_media_file(
+                                    img_path, full_media_path, media_path, img_filename
+                                )
 
-                        # Handle audio file if exists
-                        if "audio_filename" in df.columns and pd.notna(row.get("audio_filename")):
-                            audio_filename = str(row["audio_filename"])
-                            audio_path = find_file_in_directory(temp_dir, audio_filename)
+                        # Handle audio
+                        if "audio_filename" in df.columns and pd.notna(
+                            row.get("audio_filename")
+                        ):
+                            audio_filename = str(row["audio_filename"]).strip()
+                            audio_path = find_file_in_directory(
+                                temp_dir, audio_filename
+                            )
                             if audio_path:
-                                item.audio = save_media_file(audio_path, full_media_path, media_path, audio_filename)
+                                item.audio = save_media_file(
+                                    audio_path,
+                                    full_media_path,
+                                    media_path,
+                                    audio_filename,
+                                )
 
                         item.save()
                         success_count += 1
                         next_order += 1
 
                     except Exception as e:
-                        messages.error(request, f"Error processing item '{row.get('title', '')}': {str(e)}")
+                        messages.error(
+                            request,
+                            f"Error processing item '{row.get('title', 'Unknown')}': {str(e)}",
+                        )
 
-                messages.success(request, f"Successfully imported {success_count} out of {len(df)} items")
+                messages.success(
+                    request,
+                    f"Successfully imported {success_count} out of {len(df)} items",
+                )
                 return redirect("teacher:manage_items", activity_id=activity.id)
 
         except Exception as e:

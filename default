@@ -33,7 +33,7 @@ server {
 	location = /background.jpg {
 		alias /home/django/django_projects/whatslearn/media/background.jpg;
 	}
-		
+	client_max_body_size 20M;
     location /static/ {
         alias /home/django/django_projects/whatslearn/static/;
         autoindex off;
@@ -42,6 +42,7 @@ server {
     # Serve media files
     location /media/ {
         alias /home/django/django_projects/whatslearn/media/;
+	client_max_body_size 20M;
         autoindex off;
     }
     location / {
