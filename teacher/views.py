@@ -800,6 +800,7 @@ def import_items(request, activity_id):
                             )
                             continue
 
+                        audio_play = str(row["audio_play"]).strip()
                         title = str(row["title"]).strip()
                         question = (
                             str(row["question"]).strip()
@@ -855,7 +856,8 @@ def import_items(request, activity_id):
                         item_data = {
                             "activity": activity,
                             "title": title,
-                            "item_type": item_type,
+                            "item_type": item_type,                            
+                            "audio_play": audio_play,
                             "item_category": (
                                 str(row["item_category"])
                                 if pd.notna(row["item_category"])
@@ -936,8 +938,7 @@ def import_items(request, activity_id):
                                     full_media_path,
                                     media_path,
                                     audio_filename,
-                                )
-
+                                )                        
                         item.save()
                         success_count += 1
                         next_order += 1
