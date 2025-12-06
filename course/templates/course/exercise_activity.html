@@ -87,6 +87,9 @@
                                 {% endif %}
                                 <p>The answer(s) are:</p>
                                 <p class="correct-answer-text fs-5 text-primary"></p>
+                                <div class="col-12 text-end mb-1">
+                                    <a href="#" class="skip-revision">Skip future revision</a>
+                                </div>
                             </div>
                         </div>
                         <div class="answer-buttons row g-2 mt-2">
@@ -236,7 +239,7 @@ $(document).ready(function() {
     let answerIndex = 1; // Numeric index starting at 1
     let numberOfAnswers = 0; // Number of answers needed for fill-in-the-blank
     const MAX_ITEMS_PER_ROUND = 10;
-    const WORKING_LIMIT = 3;
+    const WORKING_LIMIT = 5;
     let currentRound = 0;
     let sequentialCount = 0;
     let selectionMode = 'sequential';
@@ -766,6 +769,48 @@ $(document).ready(function() {
             });
         }
     });
+    $(document).on('click', '.skip-revision', function(e) {
+        e.preventDefault();
+
+        if (!currentItem) return;
+
+        console.log('Skip revision clicked for item:', currentItem.id);
+
+        // === Mark as permanently mastered ===
+        currentItem.successes = 10;
+        currentItem.is_master = true;
+        currentItem.continue_revision = false;
+
+        // Update DOM attributes so saveProgress() sends correct data
+        $(currentItem.element)
+            .attr('data-item-successes', 10)
+            .attr('data-item-is-master', 'true');
+
+        // Remove from active lists
+        workingList = workingList.filter(i => i.id !== currentItem.id);
+        newList = newList.filter(i => i.id !== currentItem.id);
+
+        // Add to masterList if not already there
+        if (!masterList.some(i => i.id === currentItem.id)) {
+            masterList.push(currentItem);
+            masterList.sort((a, b) => a.successes - b.successes);
+        }
+
+        // Visual feedback
+        triggerConfetti();
+        $(this).text('Mastered!').css({
+            color: '#28a745',
+            'pointer-events': 'none',
+            'font-weight': 'bold'
+        });
+
+        // === CRITICAL: Reset the click lock BEFORE moving to next item ===
+        isProcessingClick = false;
+
+        // Now safely go to next question
+        processNextItem();
+    });
+
 });
 </script>
 {% endblock %}
