@@ -408,16 +408,15 @@ $(document).ready(function() {
             $('#startButton, #startOverallButton').prop('disabled', true);
             return;
         }
-        dueItems.sort((a, b) => {
-            if (!a.revise_at) return 1;
-            if (!b.revise_at) return -1;
-            return new Date(a.revise_at) - new Date(b.revise_at);
-        });
-        if (dueItems.length === 0) {
-            otherItems = shuffleArray(otherItems);
-        } else {
-            otherItems.sort((a, b) => a.successes - b.successes || a.id - b.id);
-        }
+// Randomize due items (batch 1)
+        dueItems = shuffleArray(dueItems);
+
+        // Randomize other items (batch 2) - always shuffle them
+        otherItems = shuffleArray(otherItems);
+
+        // Optional: If you want even more randomness across the entire session,
+        // you could shuffle the combined list, but that would mix due/non-due.
+        // We keep priority: due first, then others.x
         updateProgressIcons();
         dueItems.concat(otherItems).forEach(item => reshuffleOptions(item));
     }
