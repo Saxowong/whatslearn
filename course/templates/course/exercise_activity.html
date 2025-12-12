@@ -63,9 +63,12 @@
                          data-item-audioplay="{{ item.audio_play|default:'start' }}"
                          data-item-correct-answer="{{ item.correct_answer|default:'' }}">
                         <div class="question-content mb-2 position-relative">
-                            <center><h2 class="feedback-result d-none mb-3"></h2></center>
-                            <div class="question-text fs-5 mb-2">
-                                {{ item.question|safe }}
+                            <center><h3 class="feedback-result d-none mb-3"></h3></center>
+                            <div class="question-text fs-5 mb-2">                            
+                                <div>{{ item.title|safe }}</div>                                
+                                {% if item.item_type == 'blank' %}
+                                    <div>{{ item.question|safe }}</div>   
+                                {% endif %}           
                             </div>
                             {% if item.image %}
                             <img src="{{ item.image.url }}" class="img-fluid" alt="Question image" style="max-height: 200px; object-fit: cover;">
@@ -79,9 +82,18 @@
                             </audio>
                             {% endif %}
                             <div class="feedback-answer d-none mt-4 mb-3">
-                                <p class="correct-answer-text fs-5 text-primary"></p>
-                                <div class="col-12 text-end mb-1">
-                                    <a href="#" class="skip-revision">Skip future revision</a>
+                                {% if item.audio %}
+                                <div class="position-absolute top-0 end-0">
+                                    <i class="bi bi-volume-up fs-2 text-primary feedback-audio-icon d-none" style="cursor: pointer;"></i>
+                                </div>
+                                {% endif %}
+
+                                <!-- ADD THIS LINE FOR BLANK QUESTIONS -->
+                                <div class="blank-feedback-sentence fs-4 lh-lg mt-3"></div>
+
+                                <p class="correct-answer-text fs-5 text-primary mb-2"></p>
+                                <div class="text-end">
+                                    <a href="#" class="skip-revision text-decoration-none">Skip future revision</a>
                                 </div>
                             </div>
                         </div>
@@ -275,10 +287,15 @@ $(document).ready(function() {
     function resetQuestionState() {
         if (!currentItem) return;
         const $card = $(currentItem.element);
+
+        // Reset everything
         $card.find('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
-        $card.find('.feedback-result, .feedback-answer, .feedback-buttons, .feedback-audio-icon').addClass('d-none');
+        $card.find('.feedback-result, .feedback-answer, .feedback-buttons').addClass('d-none');
         $card.find('.answer-buttons, .not-sure-link, img').removeClass('d-none');
-        $card.find('.skip-revision').text('Skip future revision').css({color:'', 'font-weight':''});
+        $card.find('.skip-revision').text('Skip future revision').css({color: '', 'font-weight': ''});
+
+        // Restore original question (title + blanks)
+        $card.find('.question-text').html(currentItem.original_question);
     }
 
     function reshuffleOptions(item) {
@@ -293,21 +310,62 @@ $(document).ready(function() {
 
     function showFeedback(isCorrect, text, callback) {
         const $card = $(currentItem.element);
+
+        // Hide buttons
         $card.find('.answer-buttons, .not-sure-link').addClass('d-none');
-        $card.find('.feedback-result').text(isCorrect ? 'Correct!' : 'Incorrect!')
-            .addClass(isCorrect ? 'correct' : 'incorrect').removeClass('d-none');
-        $card.find('.correct-answer-text').html(isCorrect ? text : `${text}`);
-        $card.find('.feedback-answer, .feedback-buttons').removeClass('d-none');
-        if ($card.find('audio').length) $card.find('.feedback-audio-icon').removeClass('d-none');
 
-        const audio = isCorrect ? $('#audio-correct')[0] : $('#audio-wrong')[0];
-        audio.currentTime = 0; audio.play().catch(() => {});
+        // Show Correct! / Incorrect!
+        $card.find('.feedback-result')
+            .text(isCorrect ? 'Correct!' : 'Incorrect!')
+            .toggleClass('correct', isCorrect)
+            .toggleClass('incorrect', !isCorrect)
+            .removeClass('d-none');
 
-        if (currentItem.audio_play === 'end' || currentItem.audio_play === 'both') {
-            const $qAudio = $card.find('.question-audio')[0];
-            if ($qAudio) { $qAudio.currentTime = 0; $qAudio.play().catch(() => {}); }
+        // Extract title (first line)
+        const titleMatch = currentItem.original_question.match(/<div[^>]*>([\s\S]*?)<\/div>/);
+        const title = titleMatch ? titleMatch[1].trim() : '';
+
+        let answerLine = '';
+
+        if (currentItem.isFillInTheBlank) {
+            // Extract only the blank line (second <div>)
+            const blankMatch = currentItem.original_question.match(/<div[^>]*>[\s\S]*?<\/div>\s*<div[^>]*>([\s\S]*?)<\/div>/);
+            const blankText = blankMatch ? blankMatch[1] : '';
+
+            // Replace blanks one by one with correct answers
+            let filled = blankText;
+            currentItem.correctAnswers.forEach(ans => {
+                filled = filled.replace(/_{3,}/, `<label class="text-primary">${ans}</label>`);
+            });
+            answerLine = filled;
+        } else {
+            // Card question
+            answerLine = `<label class="text-primary">${currentItem.correctAnswers.join(' · ')}</label>`;
         }
 
+        // Clean, beautiful final display
+        $card.find('.question-text').html(`
+            <div class="fs-5">${title}</div>
+            <div class="mt-3 fs-4 lh-lg">${answerLine}</div>
+        `);
+
+        // Hide old/unused feedback areas
+        $card.find('.correct-answer-text, .blank-feedback-sentence').empty();
+
+        // Show feedback panel
+        $card.find('.feedback-answer, .feedback-buttons').removeClass('d-none');
+
+        // Audio
+        const audio = isCorrect ? $('#audio-correct')[0] : $('#audio-wrong')[0];
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+
+        if (currentItem.audio_play === 'end' || currentItem.audio_play === 'both') {
+            const qAudio = $card.find('.question-audio')[0];
+            if (qAudio) qAudio.currentTime = 0, qAudio.play().catch(() => {});
+        }
+
+        // Buttons
         $card.find('.continue-btn').off('click').on('click', callback);
         $card.find('.stop-btn').off('click').on('click', () => saveProgress(false));
 
@@ -386,7 +444,7 @@ $(document).ready(function() {
             showFeedback(true, currentItem.correctAnswers.join(', '), () => processNextItem());
         } else {
             workingList.push(currentItem);
-            showFeedback(false, currentItem.correctAnswers.join(', '), () => {
+            showFeedback(false, '', () => {
                 reshuffleOptions(currentItem);
                 processNextItem();
             });
@@ -434,7 +492,7 @@ $(document).ready(function() {
             }
         } else {
             workingList.push(currentItem);
-            showFeedback(false, currentItem.correctAnswers.join(', '), () => {
+            showFeedback(false, '', () => {
                 reshuffleOptions(currentItem);
                 processNextItem();
             });
@@ -445,7 +503,7 @@ $(document).ready(function() {
         e.preventDefault();
         if (!currentItem) return;
         workingList.push(currentItem);
-        showFeedback(false, currentItem.correctAnswers.join(', '), () => {
+        showFeedback(false, '', () => {
             reshuffleOptions(currentItem);
             processNextItem();
         });

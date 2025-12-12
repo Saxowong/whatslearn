@@ -280,6 +280,7 @@ def revision_view(request, course_id):
         .values(
             "id",
             "item__id",
+            "item__title",
             "item__item_type",
             "item__question",
             "item__answer",
@@ -316,6 +317,7 @@ def revision_view(request, course_id):
             .values(
                 "id",
                 "item__id",
+                "item__item_title",
                 "item__item_type",
                 "item__question",
                 "item__answer",
@@ -405,6 +407,7 @@ def revision_view(request, course_id):
             "id": item["id"],
             "item_id": item["item__id"],
             "item_type": item["item__item_type"],
+            "title": item["item__title"],
             "question": item["item__question"],
             "answer": item["item__answer"],
             "answer1": item["item__answer1"],

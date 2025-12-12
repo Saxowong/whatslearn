@@ -55,6 +55,7 @@
                     {% for item in first_course.revision_items %}
                     <div class="question-card d-none"
                          data-item-id="{{ item.id }}"
+                         data-item-title="{{ item.title|escapejs }}"
                          data-item-type="{{ item.item_type }}"
                          data-item-successes="{{ item.successes|default:0 }}"
                          data-item-correct-answer="{{ item.correct_answer|escapejs }}"
@@ -70,15 +71,20 @@
                          data-item-answer3="{{ item.answer3|escapejs }}"
                          data-item-answer4="{{ item.answer4|escapejs }}"
                          data-item-audioplay="{{ item.audio_play|default:'start' }}"
-                         style="min-height: 300px;">
-                        <div class="question-content position-relative" style="flex-grow: 1;">
-                            <center><h2 class="feedback-result d-none mb-3"></h2></center>
-                            <div class="question-text fs-5 mb-2">{{ item.question|safe }}</div>
+                         style="min-height: 330px;">
+                        <div class="question-content mb-2 position-relative">
+                            <center><h3 class="feedback-result d-none mb-3"></h3></center>
+                            <div class="question-text fs-5 mb-2">                            
+                                <div>{{ item.title|safe }}</div>                                
+                                {% if item.item_type == 'blank' %}
+                                    <div>{{ item.question|safe }}</div>   
+                                {% endif %}           
+                            </div>
                             {% if item.image %}
-                            <img src="{{ item.image }}" class="img-fluid mb-2" alt="Question image" style="max-height: 200px; object-fit: cover;">
+                            <img src="{{ item.image }}" class="img-fluid" alt="Question image" style="max-height: 200px; object-fit: cover;">
                             {% endif %}
                             {% if item.audio %}
-                            <div class="position-absolute top-0 end-0">
+                            <div class="position-absolute top-0 end-0 mt-2">
                                 <i class="bi bi-volume-up fs-2 text-primary question-audio-icon" style="cursor: pointer;"></i>
                             </div>
                             <audio class="d-none question-audio" preload="auto">
@@ -92,6 +98,10 @@
                                     <i class="bi bi-volume-up fs-2 text-primary feedback-audio-icon d-none" style="cursor: pointer;"></i>
                                 </div>
                                 {% endif %}
+
+                                <!-- BLANK QUESTION FEEDBACK -->
+                                <div class="blank-feedback-sentence fs-4 lh-lg mt-3"></div>
+
                                 <p class="correct-answer-text fs-5 text-primary mb-2"></p>
                                 <div class="text-end">
                                     <a href="#" class="skip-revision text-decoration-none">Skip future revision</a>
@@ -99,7 +109,7 @@
                             </div>
                         </div>
 
-                        <div class="answer-buttons row g-2 mt-0" style="margin-top: auto;">
+                        <div class="answer-buttons row g-2 mt-2">
                             <div class="col-12 text-end mb-1">
                                 <a href="#" class="not-sure-link text-muted">Not sure?</a>
                             </div>
@@ -124,10 +134,10 @@
                         <div class="modal-content">
                             <div class="modal-body text-center py-5">
                                 <h4 id="feedbackResult">Round Completed!</h4>
-                                <p id="correctAnswerText" class="lead"></p>
+                                <p id="correctAnswerText" class="lead">You got <label id="roundScore">0</label> out of 10 correct</p>
                                 <div class="my-4">
-                                    <div class="progress-icons d-inline-flex gap-1"></div>
-                                    <span class="ms-3 correct-count h5">0/10</span>
+                                    <div class="progress-icons d-inline-flex gap-2"></div>
+                                    <span class="ms-3 h5 correct-count">0/10</span>
                                 </div>
                                 <div class="d-flex justify-content-center gap-3">
                                     <button class="btn btn-success btn-lg" id="continueButton">Continue Revision</button>
@@ -164,21 +174,31 @@
 </div>
 
 <style>
-.welcome-block { border: 1px solid #ddd; border-radius: 8px; min-height: 300px; }
-.question-card { min-height: 300px; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
-.question-content { flex-grow: 1; }
+:root {
+  --bs-card-border-color: var(--bs-border-color-translucent, rgba(0, 0, 0, 0.175));
+}
+.not-sure-link { display: block; font-size: 1em; text-decoration: none; }
+#questions { position: relative; }
+.progress-icon { color: #28a745; font-size: 1em; margin: 0 2px; }
+.not-sure-link:hover { text-decoration: underline; }
+.welcome-block { margin: 0 auto; min-height: 330px; border: 1px solid var(--bs-card-border-color); }
+.activity-description-content { margin-bottom: 1rem; }
+.question-card { min-height: 330px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid var(--bs-card-border-color); border-radius: 0.25rem; padding: 15px; }
+.question-content { position: relative; padding-top: 10px; }
 .question-text { margin-right: 40px; }
-.answer-buttons button { white-space: normal; min-height: 40px; font-size: 1.1em; }
+.answer-buttons { margin-top: 10px; }
+.answer-buttons button { white-space: normal; height: 100%; min-height: 40px; font-size: 1.1em; }
 .correct-answer { background-color: #d4edda !important; border-color: #28a745 !important; }
 .incorrect-answer { background-color: #f8d7da !important; border-color: #dc3545 !important; }
-.bi-volume-up { color: #0d6efd; cursor: pointer; }
+.feedback-result.correct { color: #28a745; font-weight: 600; }
+.feedback-result.incorrect { color: #dc3545; font-weight: 600; }
+.progress-container { max-width: 500px; margin: 0 auto; }
+.active-activity { background-color: #cfe4fb; }
+.bi-volume-up { color: #0d6efd; transition: opacity 0.2s; }
 .bi-volume-up:hover { opacity: 0.8; }
-.skip-revision, .not-sure-link { font-size: 1em; text-decoration: none; }
-.skip-revision:hover, .not-sure-link:hover { text-decoration: underline; }
-.not-sure-link { color: #6c757d; }
-.feedback-result.correct { color: #28a745; }
-.feedback-result.incorrect { color: #dc3545; }
-.course-item.active { background-color: #e7f1ff; border-left: 3px solid #007bff !important; font-weight: 500; }
+.selected-answer { border-width: 2px !important; }
+.text-primary { color: #0d6efd !important; }
+.text-danger { color: #dc3545 !important; }
 </style>
 
 <script>
@@ -188,6 +208,11 @@ $(document).ready(function() {
     let answerIndex = 1, numberOfAnswers = 0;
     const MAX_ITEMS_PER_ROUND = 10;
     let isProcessingClick = false;
+    let hasPlayedStartAudio = false;
+
+    function stopAllQuestionAudios() {
+        document.querySelectorAll('.question-audio').forEach(a => { a.pause(); a.currentTime = 0; });
+    }
 
     function shuffleArray(a) {
         for (let i = a.length - 1; i > 0; i--) {
@@ -212,21 +237,38 @@ $(document).ready(function() {
             const $card = $(this);
             let correctAnswers = [];
             try { correctAnswers = JSON.parse($card.data('item-correct-sequence') || '[]'); } catch(e) {}
-            if (!correctAnswers.length) correctAnswers = [$card.data('item-correct-answer')].filter(Boolean);
+            
+            // Build correct answers array from answer1/answer2/answer3/answer4
+            const numberAnswers = parseInt($card.data('item-number-answers')) || 1;
+            if (!correctAnswers.length) {
+                for (let i = 1; i <= numberAnswers; i++) {
+                    const ans = $card.data(`item-answer${i}`);
+                    if (ans) correctAnswers.push(ans);
+                }
+            }
+            
+            // Fallback to main correct answer if needed
+            if (numberAnswers === 1 && $card.data('item-correct-answer') && !correctAnswers.includes($card.data('item-correct-answer'))) {
+                correctAnswers = [$card.data('item-correct-answer')];
+            }
+
             const item = {
-                id: $card.data('item-id'), element: this,
+                id: $card.data('item-id'), 
+                element: this,
                 successes: parseInt($card.data('item-successes') || 0),
-                correctAnswers: correctAnswers, correctAnswer: $card.data('item-correct-answer'),
+                correctAnswers: correctAnswers, 
+                correctAnswer: $card.data('item-correct-answer'),
                 isFillInTheBlank: $card.data('item-type') === 'blank',
-                numberAnswers: parseInt($card.data('item-number-answers') || 1),
+                numberAnswers: numberAnswers,
                 next_1: parseInt($card.data('item-next1') || 1),
                 next_2: parseInt($card.data('item-next2') || 1),
                 revise_at: $card.data('item-reviseat') || null,
                 continue_revision: $card.data('item-continuerevision') === true,
-                original_question: $card.find('.question-text').html(),
+                original_question: $card.find('.question-text').html(), // Preserve title + question structure
                 audio_play: $card.data('item-audioplay') || 'start',
                 options: $card.find('.answer-btn').map(function() { return $(this).data('option'); }).get()
             };
+            
             if (item.revise_at && new Date(item.revise_at) <= now && item.continue_revision) dueItems.push(item);
             else if (item.continue_revision) otherItems.push(item);
         });
@@ -252,6 +294,7 @@ $(document).ready(function() {
 
         answerIndex = 1;
         numberOfAnswers = currentItem.isFillInTheBlank ? currentItem.numberAnswers : 1;
+        hasPlayedStartAudio = false;
 
         resetQuestionState();
         showItem(currentItem);
@@ -261,24 +304,28 @@ $(document).ready(function() {
     function showItem(item) {
         $('.question-card').addClass('d-none');
         $(item.element).removeClass('d-none');
-        $(item.element).find('.question-text').html(item.original_question);
+        $(item.element).find('.question-text').html(item.original_question); // Restore title + question
 
+        stopAllQuestionAudios();
         const $audio = $(item.element).find('.question-audio')[0];
-        if ($audio && (item.audio_play === 'start' || item.audio_play === 'both')) {
+        if ($audio && !hasPlayedStartAudio && (item.audio_play === 'start' || item.audio_play === 'both')) {
             $audio.currentTime = 0;
             $audio.play().catch(() => {});
+            hasPlayedStartAudio = true;
         }
     }
 
     function resetQuestionState() {
         if (!currentItem) return;
         const $card = $(currentItem.element);
+
         $card.find('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
-        $card.find('.feedback-result, .feedback-answer, .feedback-buttons, .feedback-audio-icon').addClass('d-none');
-        $card.find('.answer-buttons, .not-sure-link, .question-audio-icon, img').removeClass('d-none');
-        $card.find('.skip-revision')
-            .text('Skip future revision')
-            .css({ color: '', 'font-weight': '', 'pointer-events': '' });
+        $card.find('.feedback-result, .feedback-answer, .feedback-buttons').addClass('d-none');
+        $card.find('.answer-buttons, .not-sure-link, img').removeClass('d-none');
+        $card.find('.skip-revision').text('Skip future revision').css({color: '', 'font-weight': ''});
+
+        // Restore original title + question structure exactly
+        $card.find('.question-text').html(currentItem.original_question);
     }
 
     function reshuffleOptions(item) {
@@ -292,28 +339,68 @@ $(document).ready(function() {
 
     function showFeedback(isCorrect, text, callback) {
         const $card = $(currentItem.element);
+
+        // Hide answer buttons
         $card.find('.answer-buttons, .not-sure-link').addClass('d-none');
-        $card.find('.feedback-result').text(isCorrect ? 'Correct!' : 'Incorrect!')
-            .addClass(isCorrect ? 'correct' : 'incorrect').removeClass('d-none');
-        $card.find('.correct-answer-text').html(isCorrect ? text : `${text}`);
-        $card.find('.feedback-answer, .feedback-buttons').removeClass('d-none');
-        if ($card.find('audio').length) $card.find('.feedback-audio-icon').removeClass('d-none');
 
-        const audio = isCorrect ? $('#audio-correct')[0] : $('#audio-wrong')[0];
-        audio.currentTime = 0; audio.play().catch(() => {});
+        // Show Correct! / Incorrect!
+        $card.find('.feedback-result')
+            .text(isCorrect ? 'Correct!' : 'Incorrect!')
+            .toggleClass('correct', isCorrect)
+            .toggleClass('incorrect', !isCorrect)
+            .removeClass('d-none');
 
-        if (currentItem.audio_play === 'end' || currentItem.audio_play === 'both') {
-            const $qAudio = $card.find('.question-audio')[0];
-            if ($qAudio) { $qAudio.currentTime = 0; $qAudio.play().catch(() => {}); }
+        // Extract title (first div) and blank question (second div)
+        const titleMatch = currentItem.original_question.match(/<div[^>]*>([\s\S]*?)<\/div>/);
+        const title = titleMatch ? titleMatch[1].trim() : '';
+
+        let answerLine = '';
+
+        if (currentItem.isFillInTheBlank) {
+            // Extract blank line (second div)
+            const blankMatch = currentItem.original_question.match(/<div[^>]*>[\s\S]*?<\/div>\s*<div[^>]*>([\s\S]*?)<\/div>/);
+            const blankText = blankMatch ? blankMatch[1] : '';
+
+            // Replace blanks with correct answers
+            let filled = blankText;
+            currentItem.correctAnswers.forEach(ans => {
+                filled = filled.replace(/_{3,}/, `<label class="text-primary">${ans}</label>`);
+            });
+            answerLine = filled;
+        } else {
+            // Regular question - show correct answer
+            answerLine = `<label class="text-primary">${currentItem.correctAnswers.join(' · ')}</label>`;
         }
 
-        $card.find('.continue-btn').off('click').on('click', () => {
-            if (callback) callback();
-        }).text(isCorrect ? 'Continue' : 'Try Again');
+        // Final display with title + completed answer
+        $card.find('.question-text').html(`
+            <div class="fs-5">${title}</div>
+            <div class="mt-3 fs-4 lh-lg">${answerLine}</div>
+        `);
 
-        $card.find('.stop-btn').off('click').on('click', () => {
-            saveProgress(false);
-        });
+        // Clean old feedback
+        $card.find('.correct-answer-text, .blank-feedback-sentence').empty();
+
+        // Show feedback panel
+        $card.find('.feedback-answer, .feedback-buttons').removeClass('d-none');
+
+        // Play audio feedback
+        const audio = isCorrect ? $('#audio-correct')[0] : $('#audio-wrong')[0];
+        audio.currentTime = 0; 
+        audio.play().catch(() => {});
+
+        // Play question audio if needed
+        if (currentItem.audio_play === 'end' || currentItem.audio_play === 'both') {
+            const qAudio = $card.find('.question-audio')[0];
+            if (qAudio) {
+                qAudio.currentTime = 0;
+                qAudio.play().catch(() => {});
+            }
+        }
+
+        // Setup buttons
+        $card.find('.continue-btn').off('click').on('click', callback);
+        $card.find('.stop-btn').off('click').on('click', () => saveProgress(false));
 
         if (isCorrect) triggerConfetti();
     }
@@ -360,16 +447,20 @@ $(document).ready(function() {
 
     function showRoundCompletion() {
         $('#feedbackModal').modal('show');
-        $('#feedbackResult').text('Round Completed!');
-        $('#correctAnswerText').text(`You got ${correctCount} out of ${MAX_ITEMS_PER_ROUND} correct.`);
-        $('.progress-icons').empty();
-        for (let i = 0; i < correctCount; i++) $('.progress-icons').append('<i class="bi bi-check-circle-fill text-success"></i>');
-        for (let i = correctCount; i < MAX_ITEMS_PER_ROUND; i++) $('.progress-icons').append('<i class="bi bi-circle text-secondary"></i>');
-        $('.correct-count').text(`${correctCount}/${MAX_ITEMS_PER_ROUND}`);
-    }
+        $('#roundScore').text(correctCount);
+        $('.correct-count').text(`${correctCount}/10`);
 
+        $('.progress-icons').empty();
+        for (let i = 0; i < correctCount; i++) {
+            $('.progress-icons').append('<i class="bi bi-check-circle-fill text-success fs-4"></i>');
+        }
+        for (let i = correctCount; i < 10; i++) {
+            $('.progress-icons').append('<i class="bi bi-circle text-secondary fs-4"></i>');
+        }
+    }
     $(document).on('click', '#startButton, #startOverallButton', function(e) {
         e.preventDefault();
+        document.querySelectorAll('audio').forEach(a => { a.pause(); a.currentTime = 0; });
         initializeLists();
         if (dueItems.length + otherItems.length === 0) return;
         $('#welcomeBlock').addClass('d-none');
@@ -388,10 +479,10 @@ $(document).ready(function() {
         }
     });
 
-    // FIXED: Correct answers now update scheduling
     function handleAnswer($button) {
         const selected = $button.data('option');
-        const isCorrect = selected === currentItem.correctAnswer;
+        const correct = currentItem.correctAnswer || currentItem.correctAnswers[0];
+        const isCorrect = selected === correct;
 
         $button.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'))
                .siblings().removeClass('selected-answer correct-answer incorrect-answer');
@@ -399,9 +490,9 @@ $(document).ready(function() {
         if (isCorrect) {
             correctCount++;
             currentItem.successes++;
-            currentItem.lastAnswerWasCorrect = true;  // ← ADD THIS
+            currentItem.lastAnswerWasCorrect = true;
 
-            // Update scheduling on correct answer
+            // Update scheduling
             if (currentItem.successes === 1) {
                 currentItem.next_1 = 1;
                 currentItem.next_2 = 3;
@@ -462,9 +553,9 @@ $(document).ready(function() {
             if (answerIndex >= numberOfAnswers) {
                 correctCount++;
                 currentItem.successes++;
-                currentItem.lastAnswerWasCorrect = true;  // ← ADD THIS
+                currentItem.lastAnswerWasCorrect = true;
 
-                // Update scheduling — same as handleAnswer
+                // Update scheduling
                 if (currentItem.successes === 1) {
                     currentItem.next_1 = 1; currentItem.next_2 = 3;
                 } else if (currentItem.successes === 2) {
@@ -523,8 +614,7 @@ $(document).ready(function() {
         e.preventDefault();
         if (!currentItem) return;
 
-        // Only allow skipping if the user has already answered correctly
-        // (This prevents skipping without seeing the answer)
+        // Only allow skipping if answered correctly
         if (currentItem.lastAnswerWasCorrect === true || currentItem.successes > 0) {
             currentItem.continue_revision = false;
             currentItem.successes = Math.max(currentItem.successes, 10);
@@ -533,13 +623,12 @@ $(document).ready(function() {
             currentItem.next_2 = 9999;
             currentItem.revise_at = '2099-12-31';
 
-            // Only count as revised if it was answered correctly
             if (!revisedItems.includes(currentItem)) {
                 revisedItems.push(currentItem);
-                correctCount++;  // Counts as correct!
+                correctCount++;
             }
 
-            // Update DOM
+            // Update DOM attributes
             $(currentItem.element)
                 .attr('data-item-continuerevision', 'false')
                 .attr('data-item-successes', '10')
@@ -548,6 +637,13 @@ $(document).ready(function() {
                 .attr('data-item-next2', '9999')
                 .attr('data-item-reviseat', '2099-12-31');
 
+            $(this).text('Mastered!').css({
+                color: '#28a745',
+                'pointer-events': 'none',
+                'font-weight': 'bold'
+            });
+
+            triggerConfetti();
             processNextItem();
         }
     });
