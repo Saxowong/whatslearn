@@ -73,7 +73,7 @@
                          style="min-height: 300px;">
                         <div class="question-content position-relative" style="flex-grow: 1;">
                             <center><h2 class="feedback-result d-none mb-3"></h2></center>
-                            <div class="question-text fs-4 mb-2">{{ item.question|safe }}</div>
+                            <div class="question-text fs-5 mb-2">{{ item.question|safe }}</div>
                             {% if item.image %}
                             <img src="{{ item.image }}" class="img-fluid mb-2" alt="Question image" style="max-height: 200px; object-fit: cover;">
                             {% endif %}
@@ -92,7 +92,6 @@
                                     <i class="bi bi-volume-up fs-2 text-primary feedback-audio-icon d-none" style="cursor: pointer;"></i>
                                 </div>
                                 {% endif %}
-                                <p>The answer(s) are:</p>
                                 <p class="correct-answer-text fs-5 text-primary mb-2"></p>
                                 <div class="text-end">
                                     <a href="#" class="skip-revision text-decoration-none">Skip future revision</a>
@@ -296,7 +295,7 @@ $(document).ready(function() {
         $card.find('.answer-buttons, .not-sure-link').addClass('d-none');
         $card.find('.feedback-result').text(isCorrect ? 'Correct!' : 'Incorrect!')
             .addClass(isCorrect ? 'correct' : 'incorrect').removeClass('d-none');
-        $card.find('.correct-answer-text').html(isCorrect ? text : `<strong>${text}</strong>`);
+        $card.find('.correct-answer-text').html(isCorrect ? text : `${text}`);
         $card.find('.feedback-answer, .feedback-buttons').removeClass('d-none');
         if ($card.find('audio').length) $card.find('.feedback-audio-icon').removeClass('d-none');
 
