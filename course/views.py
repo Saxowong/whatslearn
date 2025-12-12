@@ -317,7 +317,7 @@ def revision_view(request, course_id):
             .values(
                 "id",
                 "item__id",
-                "item__item_title",
+                "item__title",
                 "item__item_type",
                 "item__question",
                 "item__answer",

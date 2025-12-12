@@ -55,7 +55,6 @@
                     {% for item in first_course.revision_items %}
                     <div class="question-card d-none"
                          data-item-id="{{ item.id }}"
-                         data-item-title="{{ item.title|escapejs }}"
                          data-item-type="{{ item.item_type }}"
                          data-item-successes="{{ item.successes|default:0 }}"
                          data-item-correct-answer="{{ item.correct_answer|escapejs }}"

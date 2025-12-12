@@ -373,14 +373,17 @@ $(document).ready(function() {
     }
 
     function saveProgress() {
-        const responses = items.map(i => ({
-            item_id: i.id,
-            successes: i.successes
+        const responses = items.map(item => ({
+            item_id: item.id,
+            successes: item.successes  // This is now correct because we mutate the original object
         }));
-        const isCompleted = items.every(i => i.successes >= 3);
+
+        const allMastered = items.every(item => item.successes >= 3);
+        const roundHadQuestions = correctCount > 0 || items.length > 0;
 
         $('#responses').val(JSON.stringify(responses));
-        $('#is_completed').val(isCompleted);
+        $('#is_completed').val(allMastered ? 'true' : 'false');
+
         $('#exerciseForm').submit();
     }
 
@@ -535,7 +538,7 @@ $(document).ready(function() {
 
     $('#stopButton').on('click', function() {
         $('#feedbackModal').modal('hide');
-        saveProgress();
+        saveProgress(false);  // Don't mark as completed just because they stopped
         $('#exerciseContainer').addClass('d-none');
         $('#welcomeBlock').removeClass('d-none');
         $('#welcomeBlock .alert').remove();
