@@ -81,19 +81,20 @@
                                 <source src="{{ item.audio_url }}" type="audio/mpeg">
                             </audio>
                             {% endif %}
-                            <div class="feedback-answer d-none mt-4 mb-3">
+                            <!-- FIX 1: Adjust feedback-answer positioning to prevent link blocking -->
+                            <div class="feedback-answer d-none mt-4 mb-3 position-relative" style="z-index: 10;">
                                 {% if item.audio %}
-                                <div class="position-absolute top-0 end-0">
+                                <!-- FIX 2: Move audio icon to top-left to avoid blocking skip link -->
+                                <div class="position-absolute top-0 start-0">
                                     <i class="bi bi-volume-up fs-2 text-primary feedback-audio-icon d-none" style="cursor: pointer;"></i>
                                 </div>
                                 {% endif %}
 
-                                <!-- ADD THIS LINE FOR BLANK QUESTIONS -->
                                 <div class="blank-feedback-sentence fs-4 lh-lg mt-3"></div>
-
                                 <p class="correct-answer-text fs-5 text-primary mb-2"></p>
                                 <div class="text-end">
-                                    <a href="#" class="skip-revision text-decoration-none">Skip future revision</a>
+                                    <!-- FIX 3: Add explicit z-index and pointer-events to skip link -->
+                                    <a href="#" class="skip-revision text-decoration-none" style="z-index: 20; position: relative; pointer-events: auto;">Skip future revision</a>
                                 </div>
                             </div>
                         </div>
@@ -118,7 +119,7 @@
                     {% endfor %}
                 </div>
 
-                <!-- Feedback Modal - Exactly like revision.html -->
+                <!-- Feedback Modal -->
                 <div class="modal fade" id="feedbackModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
                     <div class="modal-dialog modal-dialog-centered">
                         <div class="modal-content">
@@ -165,6 +166,18 @@
 .selected-answer { border-width: 2px !important; }
 .text-primary { color: #0d6efd !important; }
 .text-danger { color: #dc3545 !important; }
+/* FIX 4: Ensure skip link is clickable and visible */
+.skip-revision {
+    color: #0d6efd !important;
+    font-weight: 500;
+}
+.skip-revision:hover {
+    text-decoration: underline !important;
+    color: #0a58ca !important;
+}
+.skip-revision[style*="pointer-events: none"] {
+    cursor: default !important;
+}
 </style>
 
 <script>
@@ -179,17 +192,22 @@ $(document).ready(function() {
     const WORKING_LIMIT = 5;
     let isProcessingClick = false;
     let hasPlayedStartAudio = false;
+    
+    // Track recently shown questions to prevent repeats (max 2 recent items)
+    let recentlyShownIds = [];
+    const MAX_RECENT_ITEMS = 2;
 
     function stopAllQuestionAudios() {
         document.querySelectorAll('.question-audio').forEach(a => { a.pause(); a.currentTime = 0; });
     }
 
     function shuffleArray(a) {
-        for (let i = a.length - 1; i > 0; i--) {
+        let array = [...a];
+        for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [a[i], a[j]] = [a[j], a[i]];
+            [array[i], array[j]] = [array[j], array[i]];
         }
-        return a;
+        return array;
     }
 
     function triggerConfetti() {
@@ -231,15 +249,25 @@ $(document).ready(function() {
         workingList = items.filter(i => i.successes >= 1 && i.successes <= 2);
         masterList = items.filter(i => i.successes >= 3);
 
+        workingList = shuffleArray(workingList);
+        
         while (workingList.length < WORKING_LIMIT && newList.length > 0) {
             workingList.push(newList.shift());
         }
 
         correctCount = 0;
+        recentlyShownIds = [];
+    }
+
+    function getRandomItemFromPool(pool) {
+        const availableItems = pool.filter(item => !recentlyShownIds.includes(item.id));
+        const finalPool = availableItems.length > 0 ? availableItems : pool;
+        const shuffled = shuffleArray(finalPool);
+        return shuffled[Math.floor(Math.random() * shuffled.length)];
     }
 
     function processNextItem() {
-        if (correctCount >= MAX_ITEMS_PER_ROUND) {
+        if (correctCount === MAX_ITEMS_PER_ROUND) {
             showRoundCompletion();
             return;
         }
@@ -254,12 +282,18 @@ $(document).ready(function() {
             return;
         }
 
-        const shuffled = shuffleArray([...pool]);
-        currentItem = shuffled[0];
+        currentItem = getRandomItemFromPool(pool);
 
+        // Remove current item from all lists
         newList = newList.filter(i => i.id !== currentItem.id);
         workingList = workingList.filter(i => i.id !== currentItem.id);
         masterList = masterList.filter(i => i.id !== currentItem.id);
+
+        // Update recently shown list
+        recentlyShownIds.push(currentItem.id);
+        if (recentlyShownIds.length > MAX_RECENT_ITEMS) {
+            recentlyShownIds.shift();
+        }
 
         answerIndex = 1;
         numberOfAnswers = currentItem.isFillInTheBlank ? currentItem.numberAnswers : 1;
@@ -288,13 +322,17 @@ $(document).ready(function() {
         if (!currentItem) return;
         const $card = $(currentItem.element);
 
-        // Reset everything
         $card.find('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
         $card.find('.feedback-result, .feedback-answer, .feedback-buttons').addClass('d-none');
         $card.find('.answer-buttons, .not-sure-link, img').removeClass('d-none');
-        $card.find('.skip-revision').text('Skip future revision').css({color: '', 'font-weight': ''});
+        $card.find('.skip-revision')
+            .text('Skip future revision')
+            .css({
+                color: '',
+                'font-weight': '',
+                'pointer-events': 'auto'
+            });
 
-        // Restore original question (title + blanks)
         $card.find('.question-text').html(currentItem.original_question);
     }
 
@@ -311,51 +349,39 @@ $(document).ready(function() {
     function showFeedback(isCorrect, text, callback) {
         const $card = $(currentItem.element);
 
-        // Hide buttons
         $card.find('.answer-buttons, .not-sure-link').addClass('d-none');
-
-        // Show Correct! / Incorrect!
         $card.find('.feedback-result')
             .text(isCorrect ? 'Correct!' : 'Incorrect!')
             .toggleClass('correct', isCorrect)
             .toggleClass('incorrect', !isCorrect)
             .removeClass('d-none');
 
-        // Extract title (first line)
         const titleMatch = currentItem.original_question.match(/<div[^>]*>([\s\S]*?)<\/div>/);
         const title = titleMatch ? titleMatch[1].trim() : '';
 
         let answerLine = '';
 
         if (currentItem.isFillInTheBlank) {
-            // Extract only the blank line (second <div>)
             const blankMatch = currentItem.original_question.match(/<div[^>]*>[\s\S]*?<\/div>\s*<div[^>]*>([\s\S]*?)<\/div>/);
             const blankText = blankMatch ? blankMatch[1] : '';
-
-            // Replace blanks one by one with correct answers
             let filled = blankText;
             currentItem.correctAnswers.forEach(ans => {
                 filled = filled.replace(/_{3,}/, `<label class="text-primary">${ans}</label>`);
             });
             answerLine = filled;
         } else {
-            // Card question
             answerLine = `<label class="text-primary">${currentItem.correctAnswers.join(' · ')}</label>`;
         }
 
-        // Clean, beautiful final display
         $card.find('.question-text').html(`
             <div class="fs-5">${title}</div>
             <div class="mt-3 fs-4 lh-lg">${answerLine}</div>
         `);
 
-        // Hide old/unused feedback areas
         $card.find('.correct-answer-text, .blank-feedback-sentence').empty();
-
-        // Show feedback panel
         $card.find('.feedback-answer, .feedback-buttons').removeClass('d-none');
 
-        // Audio
+        // Play audio
         const audio = isCorrect ? $('#audio-correct')[0] : $('#audio-wrong')[0];
         audio.currentTime = 0;
         audio.play().catch(() => {});
@@ -375,19 +401,18 @@ $(document).ready(function() {
     function saveProgress() {
         const responses = items.map(item => ({
             item_id: item.id,
-            successes: item.successes  // This is now correct because we mutate the original object
+            successes: item.successes
         }));
 
         const allMastered = items.every(item => item.successes >= 3);
-        const roundHadQuestions = correctCount > 0 || items.length > 0;
-
         $('#responses').val(JSON.stringify(responses));
         $('#is_completed').val(allMastered ? 'true' : 'false');
-
         $('#exerciseForm').submit();
     }
 
     function showRoundCompletion() {
+        correctCount = Math.min(correctCount, MAX_ITEMS_PER_ROUND);
+        
         $('#feedbackModal').modal('show');
         $('#roundScore').text(correctCount);
         $('.correct-count').text(`${correctCount}/10`);
@@ -431,22 +456,28 @@ $(document).ready(function() {
             .siblings().removeClass('selected-answer correct-answer incorrect-answer');
 
         if (isCorrect) {
-            correctCount++;
+            if (correctCount < MAX_ITEMS_PER_ROUND) {
+                correctCount++;
+            }
             currentItem.successes++;
 
             if (currentItem.successes >= 3) {
                 currentItem.is_master = true;
                 masterList.push(currentItem);
                 if (newList.length > 0 && workingList.length < WORKING_LIMIT) {
+                    newList = shuffleArray(newList);
                     workingList.push(newList.shift());
                 }
             } else {
                 workingList.push(currentItem);
+                workingList = shuffleArray(workingList);
             }
 
             showFeedback(true, currentItem.correctAnswers.join(', '), () => processNextItem());
         } else {
             workingList.push(currentItem);
+            workingList = shuffleArray(workingList);
+            
             showFeedback(false, '', () => {
                 reshuffleOptions(currentItem);
                 processNextItem();
@@ -475,17 +506,21 @@ $(document).ready(function() {
             }
 
             if (answerIndex >= numberOfAnswers) {
-                correctCount++;
+                if (correctCount < MAX_ITEMS_PER_ROUND) {
+                    correctCount++;
+                }
                 currentItem.successes++;
 
                 if (currentItem.successes >= 3) {
                     currentItem.is_master = true;
                     masterList.push(currentItem);
                     if (newList.length > 0 && workingList.length < WORKING_LIMIT) {
+                        newList = shuffleArray(newList);
                         workingList.push(newList.shift());
                     }
                 } else {
                     workingList.push(currentItem);
+                    workingList = shuffleArray(workingList);
                 }
 
                 showFeedback(true, currentItem.correctAnswers.join(', '), () => processNextItem());
@@ -495,6 +530,8 @@ $(document).ready(function() {
             }
         } else {
             workingList.push(currentItem);
+            workingList = shuffleArray(workingList);
+            
             showFeedback(false, '', () => {
                 reshuffleOptions(currentItem);
                 processNextItem();
@@ -504,30 +541,59 @@ $(document).ready(function() {
 
     $(document).on('click', '.not-sure-link', function(e) {
         e.preventDefault();
-        if (!currentItem) return;
+        if (!currentItem || isProcessingClick) return;
+        isProcessingClick = true;
+        
         workingList.push(currentItem);
+        workingList = shuffleArray(workingList);
+        
         showFeedback(false, '', () => {
             reshuffleOptions(currentItem);
             processNextItem();
+            isProcessingClick = false;
         });
     });
 
+    // FIX 5: Complete skip revision handler (fixed state management)
     $(document).on('click', '.skip-revision', function(e) {
         e.preventDefault();
-        if (!currentItem) return;
+        
+        // Critical checks
+        if (!currentItem || isProcessingClick) return;
+        isProcessingClick = true;
 
+        // 1. Mark item as mastered (prevent future appearance)
         currentItem.successes = 10;
         currentItem.is_master = true;
-        correctCount++;
 
+        // 2. Increment correct count (if under limit)
+        if (correctCount < MAX_ITEMS_PER_ROUND) {
+            correctCount++;
+        }
+
+        // 3. Remove item from ALL rotation lists (critical fix)
+        newList = newList.filter(i => i.id !== currentItem.id);
+        workingList = workingList.filter(i => i.id !== currentItem.id);
+        masterList = masterList.filter(i => i.id !== currentItem.id);
+        
+        // 4. Remove from recently shown list (prevent stale references)
+        recentlyShownIds = recentlyShownIds.filter(id => id !== currentItem.id);
+
+        // 5. Update UI to show mastered state
         $(this).text('Mastered!').css({
             color: '#28a745',
             'pointer-events': 'none',
             'font-weight': 'bold'
         });
 
+        // 6. Visual feedback
         triggerConfetti();
-        processNextItem();
+
+        // 7. Proceed to next item (with small delay to avoid race conditions)
+        setTimeout(() => {
+            processNextItem();
+            isProcessingClick = false;
+        }, 200);
     });
 
     $('#continueButton').on('click', function() {
@@ -538,7 +604,7 @@ $(document).ready(function() {
 
     $('#stopButton').on('click', function() {
         $('#feedbackModal').modal('hide');
-        saveProgress(false);  // Don't mark as completed just because they stopped
+        saveProgress(false);
         $('#exerciseContainer').addClass('d-none');
         $('#welcomeBlock').removeClass('d-none');
         $('#welcomeBlock .alert').remove();

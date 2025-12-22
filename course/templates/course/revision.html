@@ -55,6 +55,7 @@
                     {% for item in first_course.revision_items %}
                     <div class="question-card d-none"
                          data-item-id="{{ item.id }}"
+                         data-item-title="{{ item.title|escapejs }}"
                          data-item-type="{{ item.item_type }}"
                          data-item-successes="{{ item.successes|default:0 }}"
                          data-item-correct-answer="{{ item.correct_answer|escapejs }}"
@@ -139,8 +140,7 @@
                                     <span class="ms-3 h5 correct-count">0/10</span>
                                 </div>
                                 <div class="d-flex justify-content-center gap-3">
-                                    <button class="btn btn-success btn-lg" id="continueButton">Continue Revision</button>
-                                    <button class="btn btn-outline-secondary btn-lg" id="stopButton">View Results</button>
+                                    <button class="btn btn-outline-secondary btn-lg" id="stopButton">Continue</button>
                                 </div>
                             </div>
                         </div>
@@ -457,6 +457,8 @@ $(document).ready(function() {
             $('.progress-icons').append('<i class="bi bi-circle text-secondary fs-4"></i>');
         }
     }
+
+    
     $(document).on('click', '#startButton, #startOverallButton', function(e) {
         e.preventDefault();
         document.querySelectorAll('audio').forEach(a => { a.pause(); a.currentTime = 0; });
@@ -645,13 +647,6 @@ $(document).ready(function() {
             triggerConfetti();
             processNextItem();
         }
-    });
-
-    // Modal buttons
-    $('#continueButton').on('click', function() {
-        $('#feedbackModal').modal('hide');
-        initializeLists();
-        processNextItem();
     });
 
     $('#stopButton').on('click', function() {
