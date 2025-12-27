@@ -5,6 +5,7 @@
 {% endblock %}
 {% block activity_content %}
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
 <audio id="audio-correct" preload="auto">
     <source src="/media/audio/correct.mp3" type="audio/mpeg">
 </audio>
@@ -15,7 +16,8 @@
 <div class="card" style="border: none;">
     <div class="card-body" style="padding:0px;">
         <div class="activity-content">
-            <!-- Welcome Block -->
+
+            <!-- Welcome Block with Progress Bar -->
             <div id="welcomeBlock" class="text-center welcome-block p-4 mb-2 rounded">
                 <div class="activity-description mb-5 text-start">
                     <p>This exercise has {{ activity.items.count }} question{{ activity.items.count|pluralize }}.</p>
@@ -60,50 +62,42 @@
                          data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
                          data-item-audioplay="{{ item.audio_play|default:'start' }}"
                          data-item-correct-answer="{{ item.correct_answer|default:'' }}">
-
                         <div class="question-content mb-2 position-relative">
                             <center><h3 class="feedback-result d-none mb-3"></h3></center>
-
-                            <div class="question-text fs-5 mb-2">
-                                <div>{{ item.title|safe }}</div>
+                            <div class="question-text fs-5 mb-2">                            
+                                <div>{{ item.title|safe }}</div>                                
                                 {% if item.item_type == 'blank' %}
-                                    <div>{{ item.question|safe }}</div>
-                                {% endif %}
+                                    <div>{{ item.question|safe }}</div>   
+                                {% endif %}           
                             </div>
-
                             {% if item.image %}
                             <img src="{{ item.image.url }}" class="img-fluid" alt="Question image" style="max-height: 200px; object-fit: cover;">
                             {% endif %}
-
                             {% if item.audio_url %}
-                            <div class="position-absolute top-0 end-0 mt-2 me-2">
+                            <div class="position-absolute top-0 end-0 mt-2">
                                 <i class="bi bi-volume-up fs-2 text-primary question-audio-icon" style="cursor: pointer;"></i>
                             </div>
                             <audio class="d-none question-audio" preload="auto">
                                 <source src="{{ item.audio_url }}" type="audio/mpeg">
                             </audio>
                             {% endif %}
-
-                            <!-- Feedback Answer (without skip link) -->
-                            <div class="feedback-answer d-none mt-4 mb-3">
+                            <!-- FIX 1: Adjust feedback-answer positioning to prevent link blocking -->
+                            <div class="feedback-answer d-none mt-4 mb-3 position-relative" style="z-index: 10;">
                                 {% if item.audio %}
-                                <div class="position-absolute top-0 start-0 mt-2 ms-2">
+                                <!-- FIX 2: Move audio icon to top-left to avoid blocking skip link -->
+                                <div class="position-absolute top-0 start-0">
                                     <i class="bi bi-volume-up fs-2 text-primary feedback-audio-icon d-none" style="cursor: pointer;"></i>
                                 </div>
                                 {% endif %}
+
                                 <div class="blank-feedback-sentence fs-4 lh-lg mt-3"></div>
                                 <p class="correct-answer-text fs-5 text-primary mb-2"></p>
-                            </div>
-
-                            <!-- Skip Revision Button (outside feedback-answer) -->
-                            <div class="text-end mt-3 d-none skip-revision-container">
-                                <a href="#" class="skip-revision btn btn-sm btn-outline-primary">
-                                    Skip future revision
-                                </a>
+                                <div class="text-end">
+                                    <!-- FIX 3: Add explicit z-index and pointer-events to skip link -->
+                                    <a href="#" class="skip-revision text-decoration-none" style="z-index: 20; position: relative; pointer-events: auto;">Skip future revision</a>
+                                </div>
                             </div>
                         </div>
-
-                        <!-- Answer Buttons -->
                         <div class="answer-buttons row g-2 mt-2">
                             <div class="col-12 text-end mb-1">
                                 <a href="#" class="not-sure-link">Not Sure?</a>
@@ -117,8 +111,6 @@
                             </div>
                             {% endfor %}
                         </div>
-
-                        <!-- Continue / Stop Buttons -->
                         <div class="feedback-buttons d-none mt-3 d-flex justify-content-center gap-2">
                             <button type="button" class="btn btn-primary continue-btn">Continue</button>
                             <button type="button" class="btn btn-secondary stop-btn">Stop</button>
@@ -127,7 +119,7 @@
                     {% endfor %}
                 </div>
 
-                <!-- Round Completion Modal -->
+                <!-- Feedback Modal -->
                 <div class="modal fade" id="feedbackModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
                     <div class="modal-dialog modal-dialog-centered">
                         <div class="modal-content">
@@ -152,28 +144,46 @@
 </div>
 
 <style>
-    .not-sure-link { display: block; font-size: 1em; text-decoration: none; }
-    .not-sure-link:hover { text-decoration: underline; }
-    .welcome-block { margin: 0 auto; min-height: 300px; border: 1px solid var(--bs-card-border-color); }
-    .question-card { min-height: 330px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid var(--bs-card-border-color); border-radius: 0.25rem; padding: 15px; }
-    .question-content { position: relative; padding-top: 10px; }
-    .answer-buttons button { white-space: normal; height: 100%; min-height: 40px; font-size: 1.1em; }
-    .correct-answer { background-color: #d4edda !important; border-color: #28a745 !important; }
-    .incorrect-answer { background-color: #f8d7da !important; border-color: #dc3545 !important; }
-    .feedback-result.correct { color: #28a745; font-weight: 600; }
-    .feedback-result.incorrect { color: #dc3545; font-weight: 600; }
-    .progress-container { max-width: 500px; margin: 0 auto; }
-    .bi-volume-up { color: #0d6efd; transition: opacity 0.2s; }
-    .bi-volume-up:hover { opacity: 0.8; }
-    .selected-answer { border-width: 2px !important; }
-
-    .skip-revision-container { z-index: 100; }
-    .skip-revision:hover { background-color: rgba(13, 110, 253, 0.1); }
+.not-sure-link { display: block; font-size: 1em; text-decoration: none; }
+#questions { position: relative; }
+.progress-icon { color: #28a745; font-size: 1em; margin: 0 2px; }
+.not-sure-link:hover { text-decoration: underline; }
+.welcome-block { margin: 0 auto; min-height: 300px; border: 1px solid var(--bs-card-border-color); }
+.activity-description-content { margin-bottom: 1rem; }
+.question-card { min-height: 330px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid var(--bs-card-border-color); border-radius: 0.25rem; padding: 15px; }
+.question-content { position: relative; padding-top: 10px; }
+.question-text { margin-right: 40px; }
+.answer-buttons { margin-top: 10px; }
+.answer-buttons button { white-space: normal; height: 100%; min-height: 40px; font-size: 1.1em; }
+.correct-answer { background-color: #d4edda !important; border-color: #28a745 !important; }
+.incorrect-answer { background-color: #f8d7da !important; border-color: #dc3545 !important; }
+.feedback-result.correct { color: #28a745; font-weight: 600; }
+.feedback-result.incorrect { color: #dc3545; font-weight: 600; }
+.progress-container { max-width: 500px; margin: 0 auto; }
+.active-activity { background-color: #cfe4fb; }
+.bi-volume-up { color: #0d6efd; transition: opacity 0.2s; }
+.bi-volume-up:hover { opacity: 0.8; }
+.selected-answer { border-width: 2px !important; }
+.text-primary { color: #0d6efd !important; }
+.text-danger { color: #dc3545 !important; }
+/* FIX 4: Ensure skip link is clickable and visible */
+.skip-revision {
+    color: #0d6efd !important;
+    font-weight: 500;
+}
+.skip-revision:hover {
+    text-decoration: underline !important;
+    color: #0a58ca !important;
+}
+.skip-revision[style*="pointer-events: none"] {
+    cursor: default !important;
+}
 </style>
 
 <script>
 $(document).ready(function() {
-    let items = [], newList = [], workingList = [], masterList = [];
+    let items = [];
+    let newList = [], workingList = [], masterList = [];
     let currentItem = null;
     let correctCount = 0;
     let answerIndex = 1;
@@ -182,6 +192,8 @@ $(document).ready(function() {
     const WORKING_LIMIT = 5;
     let isProcessingClick = false;
     let hasPlayedStartAudio = false;
+    
+    // Track recently shown questions to prevent repeats (max 2 recent items)
     let recentlyShownIds = [];
     const MAX_RECENT_ITEMS = 2;
 
@@ -219,8 +231,6 @@ $(document).ready(function() {
                 correctAnswers = [correctAnswer];
             }
             const isFillInTheBlank = numberAnswers > 1 || (correctAnswers.length > 0 && !correctAnswer);
-            const continueRevision = $(this).data('item-continuerevision');
-            const isSkipped = continueRevision === false || String($(this).data('item-reviseat')).startsWith('2099');
 
             return {
                 id: $(this).data('item-id'),
@@ -231,26 +241,29 @@ $(document).ready(function() {
                 original_question: $(this).find('.question-text').html(),
                 audio_play: $(this).data('item-audioplay') || 'start',
                 element: this,
-                isFillInTheBlank: isFillInTheBlank,
-                continue_revision: continueRevision !== false,
-                revise_at: $(this).data('item-reviseat') || null,
-                next_1: $(this).data('item-next1') || 0,
-                next_2: $(this).data('item-next2') || 0,
-                isSkippedPermanently: isSkipped
+                isFillInTheBlank: isFillInTheBlank
             };
         }).get();
 
-        items = items.filter(item => !item.isSkippedPermanently);
         newList = items.filter(i => i.successes === 0);
         workingList = items.filter(i => i.successes >= 1 && i.successes <= 2);
         masterList = items.filter(i => i.successes >= 3);
-        workingList = shuffleArray(workingList);
 
+        workingList = shuffleArray(workingList);
+        
         while (workingList.length < WORKING_LIMIT && newList.length > 0) {
             workingList.push(newList.shift());
         }
+
         correctCount = 0;
         recentlyShownIds = [];
+    }
+
+    function getRandomItemFromPool(pool) {
+        const availableItems = pool.filter(item => !recentlyShownIds.includes(item.id));
+        const finalPool = availableItems.length > 0 ? availableItems : pool;
+        const shuffled = shuffleArray(finalPool);
+        return shuffled[Math.floor(Math.random() * shuffled.length)];
     }
 
     function processNextItem() {
@@ -258,21 +271,34 @@ $(document).ready(function() {
             showRoundCompletion();
             return;
         }
-        let pool = workingList.length > 0 ? workingList : (masterList.length > 0 ? masterList : newList);
+
+        let pool = [];
+        if (workingList.length > 0) pool = workingList;
+        else if (masterList.length > 0) pool = masterList;
+        else if (newList.length > 0) pool = newList;
+
         if (pool.length === 0) {
             showRoundCompletion();
             return;
         }
-        currentItem = shuffleArray(pool.filter(item => !recentlyShownIds.includes(item.id)))[0] || pool[0];
+
+        currentItem = getRandomItemFromPool(pool);
+
+        // Remove current item from all lists
         newList = newList.filter(i => i.id !== currentItem.id);
         workingList = workingList.filter(i => i.id !== currentItem.id);
         masterList = masterList.filter(i => i.id !== currentItem.id);
+
+        // Update recently shown list
         recentlyShownIds.push(currentItem.id);
-        if (recentlyShownIds.length > MAX_RECENT_ITEMS) recentlyShownIds.shift();
+        if (recentlyShownIds.length > MAX_RECENT_ITEMS) {
+            recentlyShownIds.shift();
+        }
 
         answerIndex = 1;
         numberOfAnswers = currentItem.isFillInTheBlank ? currentItem.numberAnswers : 1;
         hasPlayedStartAudio = false;
+
         showItem(currentItem);
         resetQuestionState();
         isProcessingClick = false;
@@ -282,6 +308,7 @@ $(document).ready(function() {
         $('.question-card').addClass('d-none');
         $(item.element).removeClass('d-none');
         $(item.element).find('.question-text').html(item.original_question);
+
         stopAllQuestionAudios();
         const audio = $(item.element).find('.question-audio')[0];
         if (audio && !hasPlayedStartAudio && (item.audio_play === 'start' || item.audio_play === 'both')) {
@@ -294,14 +321,18 @@ $(document).ready(function() {
     function resetQuestionState() {
         if (!currentItem) return;
         const $card = $(currentItem.element);
+
         $card.find('.answer-btn').removeClass('selected-answer correct-answer incorrect-answer');
-        $card.find('.feedback-result, .feedback-answer, .feedback-buttons, .skip-revision-container').addClass('d-none');
+        $card.find('.feedback-result, .feedback-answer, .feedback-buttons').addClass('d-none');
         $card.find('.answer-buttons, .not-sure-link, img').removeClass('d-none');
-        $card.find('.question-audio-icon').removeClass('d-none');
-        $card.find('.feedback-audio-icon').addClass('d-none');
-        $card.find('.skip-revision').text('Skip future revision')
-               .removeClass('btn-success disabled')
-               .addClass('btn-outline-primary');
+        $card.find('.skip-revision')
+            .text('Skip future revision')
+            .css({
+                color: '',
+                'font-weight': '',
+                'pointer-events': 'auto'
+            });
+
         $card.find('.question-text').html(currentItem.original_question);
     }
 
@@ -317,6 +348,7 @@ $(document).ready(function() {
 
     function showFeedback(isCorrect, text, callback) {
         const $card = $(currentItem.element);
+
         $card.find('.answer-buttons, .not-sure-link').addClass('d-none');
         $card.find('.feedback-result')
             .text(isCorrect ? 'Correct!' : 'Incorrect!')
@@ -326,7 +358,9 @@ $(document).ready(function() {
 
         const titleMatch = currentItem.original_question.match(/<div[^>]*>([\s\S]*?)<\/div>/);
         const title = titleMatch ? titleMatch[1].trim() : '';
+
         let answerLine = '';
+
         if (currentItem.isFillInTheBlank) {
             const blankMatch = currentItem.original_question.match(/<div[^>]*>[\s\S]*?<\/div>\s*<div[^>]*>([\s\S]*?)<\/div>/);
             const blankText = blankMatch ? blankMatch[1] : '';
@@ -338,57 +372,112 @@ $(document).ready(function() {
         } else {
             answerLine = `<label class="text-primary">${currentItem.correctAnswers.join(' · ')}</label>`;
         }
+
         $card.find('.question-text').html(`
             <div class="fs-5">${title}</div>
             <div class="mt-3 fs-4 lh-lg">${answerLine}</div>
         `);
 
+        $card.find('.correct-answer-text, .blank-feedback-sentence').empty();
         $card.find('.feedback-answer, .feedback-buttons').removeClass('d-none');
 
-        if (isCorrect) {
-            $card.find('.skip-revision-container').removeClass('d-none');
-        }
-
-        $card.find('.question-audio-icon').addClass('d-none');
-        $card.find('.feedback-audio-icon').removeClass('d-none');
-
+        // Play audio
         const audio = isCorrect ? $('#audio-correct')[0] : $('#audio-wrong')[0];
         audio.currentTime = 0;
         audio.play().catch(() => {});
+
         if (currentItem.audio_play === 'end' || currentItem.audio_play === 'both') {
             const qAudio = $card.find('.question-audio')[0];
             if (qAudio) qAudio.currentTime = 0, qAudio.play().catch(() => {});
         }
 
+        // Buttons
         $card.find('.continue-btn').off('click').on('click', callback);
-        $card.find('.stop-btn').off('click').on('click', () => saveProgress());
+        $card.find('.stop-btn').off('click').on('click', () => saveProgress(false));
+
         if (isCorrect) triggerConfetti();
     }
 
+    function saveProgress() {
+        const responses = items.map(item => ({
+            item_id: item.id,
+            successes: item.successes
+        }));
+
+        const allMastered = items.every(item => item.successes >= 3);
+        $('#responses').val(JSON.stringify(responses));
+        $('#is_completed').val(allMastered ? 'true' : 'false');
+        $('#exerciseForm').submit();
+    }
+
+    function showRoundCompletion() {
+        correctCount = Math.min(correctCount, MAX_ITEMS_PER_ROUND);
+        
+        $('#feedbackModal').modal('show');
+        $('#roundScore').text(correctCount);
+        $('.correct-count').text(`${correctCount}/10`);
+
+        $('.progress-icons').empty();
+        for (let i = 0; i < correctCount; i++) {
+            $('.progress-icons').append('<i class="bi bi-check-circle-fill text-success fs-4"></i>');
+        }
+        for (let i = correctCount; i < 10; i++) {
+            $('.progress-icons').append('<i class="bi bi-circle text-secondary fs-4"></i>');
+        }
+    }
+
+    $('#startButton').on('click', function() {
+        document.querySelectorAll('audio').forEach(a => { a.pause(); a.currentTime = 0; });
+        initializeLists();
+        if (items.length === 0) return;
+
+        $('#welcomeBlock').addClass('d-none');
+        $('#exerciseContainer').removeClass('d-none');
+        processNextItem();
+    });
+
+    $(document).on('click', '.answer-btn', function() {
+        if (isProcessingClick || !currentItem) return;
+        isProcessingClick = true;
+
+        if (currentItem.isFillInTheBlank) {
+            handleFillInTheBlank($(this));
+        } else {
+            handleAnswer($(this));
+        }
+    });
+
     function handleAnswer($btn) {
         const selected = $btn.data('option');
-        const correct = currentItem.correctAnswers[0];
+        const correct = currentItem.correctAnswer || currentItem.correctAnswers[0];
         const isCorrect = selected === correct;
+
         $btn.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'))
             .siblings().removeClass('selected-answer correct-answer incorrect-answer');
 
         if (isCorrect) {
-            if (correctCount < MAX_ITEMS_PER_ROUND) correctCount++;
+            if (correctCount < MAX_ITEMS_PER_ROUND) {
+                correctCount++;
+            }
             currentItem.successes++;
+
             if (currentItem.successes >= 3) {
                 currentItem.is_master = true;
                 masterList.push(currentItem);
                 if (newList.length > 0 && workingList.length < WORKING_LIMIT) {
+                    newList = shuffleArray(newList);
                     workingList.push(newList.shift());
                 }
             } else {
                 workingList.push(currentItem);
                 workingList = shuffleArray(workingList);
             }
-            showFeedback(true, '', () => processNextItem());
+
+            showFeedback(true, currentItem.correctAnswers.join(', '), () => processNextItem());
         } else {
             workingList.push(currentItem);
             workingList = shuffleArray(workingList);
+            
             showFeedback(false, '', () => {
                 reshuffleOptions(currentItem);
                 processNextItem();
@@ -401,6 +490,7 @@ $(document).ready(function() {
         const $card = $(currentItem.element);
         const correctAnswer = $card.data(`item-answer${answerIndex}`);
         const isCorrect = selected === correctAnswer;
+
         $btn.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'))
             .siblings().removeClass('selected-answer correct-answer incorrect-answer');
 
@@ -414,20 +504,26 @@ $(document).ready(function() {
                 html = html.substring(0, start) + `<span class="text-primary">${selected}</span>` + html.substring(end);
                 $text.html(html);
             }
+
             if (answerIndex >= numberOfAnswers) {
-                if (correctCount < MAX_ITEMS_PER_ROUND) correctCount++;
+                if (correctCount < MAX_ITEMS_PER_ROUND) {
+                    correctCount++;
+                }
                 currentItem.successes++;
+
                 if (currentItem.successes >= 3) {
                     currentItem.is_master = true;
                     masterList.push(currentItem);
                     if (newList.length > 0 && workingList.length < WORKING_LIMIT) {
+                        newList = shuffleArray(newList);
                         workingList.push(newList.shift());
                     }
                 } else {
                     workingList.push(currentItem);
                     workingList = shuffleArray(workingList);
                 }
-                showFeedback(true, '', () => processNextItem());
+
+                showFeedback(true, currentItem.correctAnswers.join(', '), () => processNextItem());
             } else {
                 answerIndex++;
                 isProcessingClick = false;
@@ -435,6 +531,7 @@ $(document).ready(function() {
         } else {
             workingList.push(currentItem);
             workingList = shuffleArray(workingList);
+            
             showFeedback(false, '', () => {
                 reshuffleOptions(currentItem);
                 processNextItem();
@@ -442,71 +539,14 @@ $(document).ready(function() {
         }
     }
 
-    function saveProgress() {
-        console.log("saveProgress called");
-        console.log("Total items:", items.length);
-
-        const responses = items.map(item => {
-            const response = {
-                item_id: item.id,
-                successes: item.successes || 0,
-                continue_revision: item.continue_revision === false ? false : true,  // Explicit boolean
-                is_master: item.is_master || false,
-                revise_at: item.revise_at || null,
-                next_1: item.next_1 || 0,
-                next_2: item.next_2 || 0
-            };
-            console.log(`Item ${item.id}: continue_revision = ${response.continue_revision}`);
-            return response;
-        });
-
-        console.log("Final responses JSON:", JSON.stringify(responses));
-
-        $('#responses').val(JSON.stringify(responses));
-
-        const allMastered = items.every(i => i.successes >= 3 || i.continue_revision === false);
-        $('#is_completed').val(allMastered ? 'true' : 'false');
-
-        alert("Submitting progress...\nCheck browser console (F12) for the exact data being sent!");
-
-        $('#exerciseForm').submit();
-    }
-
-    function showRoundCompletion() {
-        correctCount = Math.min(correctCount, MAX_ITEMS_PER_ROUND);
-        $('#feedbackModal').modal('show');
-        $('#roundScore').text(correctCount);
-        $('.correct-count').text(`${correctCount}/10`);
-        $('.progress-icons').empty();
-        for (let i = 0; i < correctCount; i++) $('.progress-icons').append('<i class="bi bi-check-circle-fill text-success fs-4"></i>');
-        for (let i = correctCount; i < 10; i++) $('.progress-icons').append('<i class="bi bi-circle text-secondary fs-4"></i>');
-    }
-
-    $('#startButton').on('click', function() {
-        document.querySelectorAll('audio').forEach(a => { a.pause(); a.currentTime = 0; });
-        initializeLists();
-        if (items.length === 0) return;
-        $('#welcomeBlock').addClass('d-none');
-        $('#exerciseContainer').removeClass('d-none');
-        processNextItem();
-    });
-
-    $(document).on('click', '.answer-btn', function() {
-        if (isProcessingClick || !currentItem) return;
-        isProcessingClick = true;
-        if (currentItem.isFillInTheBlank) {
-            handleFillInTheBlank($(this));
-        } else {
-            handleAnswer($(this));
-        }
-    });
-
     $(document).on('click', '.not-sure-link', function(e) {
         e.preventDefault();
         if (!currentItem || isProcessingClick) return;
         isProcessingClick = true;
+        
         workingList.push(currentItem);
         workingList = shuffleArray(workingList);
+        
         showFeedback(false, '', () => {
             reshuffleOptions(currentItem);
             processNextItem();
@@ -514,48 +554,46 @@ $(document).ready(function() {
         });
     });
 
+    // FIX 5: Complete skip revision handler (fixed state management)
     $(document).on('click', '.skip-revision', function(e) {
         e.preventDefault();
-
-        if (!currentItem || isProcessingClick) {
-            // Force allow skip
-            isProcessingClick = false;
-        }
-
+        
+        // Critical checks
+        if (!currentItem || isProcessingClick) return;
         isProcessingClick = true;
 
-        currentItem.continue_revision = false;
+        // 1. Mark item as mastered (prevent future appearance)
         currentItem.successes = 10;
         currentItem.is_master = true;
-        currentItem.revise_at = '2099-12-31';
-        currentItem.next_1 = 9999;
-        currentItem.next_2 = 9999;
 
-        $(currentItem.element)
-            .attr('data-item-continuerevision', 'false')
-            .attr('data-item-successes', '10')
-            .attr('data-item-is-master', 'true')
-            .attr('data-item-reviseat', '2099-12-31')
-            .attr('data-item-next1', '9999')
-            .attr('data-item-next2', '9999');
+        // 2. Increment correct count (if under limit)
+        if (correctCount < MAX_ITEMS_PER_ROUND) {
+            correctCount++;
+        }
 
-        if (correctCount < MAX_ITEMS_PER_ROUND) correctCount++;
-
+        // 3. Remove item from ALL rotation lists (critical fix)
         newList = newList.filter(i => i.id !== currentItem.id);
         workingList = workingList.filter(i => i.id !== currentItem.id);
         masterList = masterList.filter(i => i.id !== currentItem.id);
+        
+        // 4. Remove from recently shown list (prevent stale references)
         recentlyShownIds = recentlyShownIds.filter(id => id !== currentItem.id);
 
-        $(this).text('Mastered!')
-            .removeClass('btn-outline-primary')
-            .addClass('btn-success')
-            .prop('disabled', true);
+        // 5. Update UI to show mastered state
+        $(this).text('Mastered!').css({
+            color: '#28a745',
+            'pointer-events': 'none',
+            'font-weight': 'bold'
+        });
 
+        // 6. Visual feedback
         triggerConfetti();
 
-        $(currentItem.element).find('.feedback-buttons, .feedback-answer, .skip-revision-container').addClass('d-none');
-
-        processNextItem();
+        // 7. Proceed to next item (with small delay to avoid race conditions)
+        setTimeout(() => {
+            processNextItem();
+            isProcessingClick = false;
+        }, 200);
     });
 
     $('#continueButton').on('click', function() {
@@ -566,9 +604,10 @@ $(document).ready(function() {
 
     $('#stopButton').on('click', function() {
         $('#feedbackModal').modal('hide');
-        saveProgress();
+        saveProgress(false);
         $('#exerciseContainer').addClass('d-none');
         $('#welcomeBlock').removeClass('d-none');
+        $('#welcomeBlock .alert').remove();
     });
 
     $(document).on('click', '.question-audio-icon, .feedback-audio-icon', function() {

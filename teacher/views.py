@@ -13,7 +13,7 @@ from django.conf import settings
 from .forms import CourseForm, LessonForm, ActivityForm, ItemForm
 import os, zipfile
 import tempfile
-from io import TextIOWrapper
+from io import TextIOWrapper, BytesIO
 import pandas as pd
 import uuid
 import re
@@ -856,7 +856,7 @@ def import_items(request, activity_id):
                         item_data = {
                             "activity": activity,
                             "title": title,
-                            "item_type": item_type,                            
+                            "item_type": item_type,
                             "audio_play": audio_play,
                             "item_category": (
                                 str(row["item_category"])
@@ -938,7 +938,7 @@ def import_items(request, activity_id):
                                     full_media_path,
                                     media_path,
                                     audio_filename,
-                                )                        
+                                )
                         item.save()
                         success_count += 1
                         next_order += 1
@@ -960,6 +960,60 @@ def import_items(request, activity_id):
             return redirect("teacher:manage_items", activity_id=activity.id)
 
     return redirect("teacher:manage_items", activity_id=activity.id)
+
+
+def export_items(request, activity_id):
+    activity = get_object_or_404(Activity, id=activity_id)
+
+    # Query all items for this activity, ordered
+    items = Item.objects.filter(activity=activity).order_by("order")
+
+    # Prepare data for Excel
+    data = []
+    for item in items:
+        data.append(
+            {
+                "title": item.title or "",
+                "item_type": item.item_type or "",
+                "item_category": item.item_category or "",
+                "question": item.question or "",
+                "answer": item.answer or "",
+                "answer1": item.answer1 or "",
+                "answer2": item.answer2 or "",
+                "answer3": item.answer3 or "",
+                "answer4": item.answer4 or "",
+                "audio_filename": item.audio.name.split("/")[-1] if item.audio else "",
+                "audio_play": item.audio_play or "",
+            }
+        )
+
+    # Create DataFrame
+    df = pd.DataFrame(data)
+
+    # Create in-memory ZIP file
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        # Write Excel file
+        excel_buffer = BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+            df.to_excel(writer, sheet_name="Items", index=False)
+        excel_buffer.seek(0)
+        zip_file.writestr("items.xlsx", excel_buffer.getvalue())
+
+        # Add actual audio files if they exist
+        for item in items:
+            if item.audio and item.audio.name:
+                audio_path = item.audio.path
+                if os.path.exists(audio_path):
+                    zip_file.write(audio_path, os.path.basename(audio_path))
+
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type="application/zip")
+    response["Content-Disposition"] = (
+        f'attachment; filename="{activity.title}_items_export.zip"'
+    )
+
+    return response
 
 
 def find_file_in_directory(directory, filename):

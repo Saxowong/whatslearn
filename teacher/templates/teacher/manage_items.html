@@ -42,6 +42,9 @@
             <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#importItemsModal" aria-label="Import items">
                 <i class="bi bi-upload"></i> Import Items
             </button>
+            <a href="{% url 'teacher:export_items' activity.id %}" class="btn btn-secondary" aria-label="Export items">
+                <i class="bi bi-download"></i> Export Items
+            </a>
         </div>
     </div>
     <div class="card">

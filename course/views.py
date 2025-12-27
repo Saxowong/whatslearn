@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from datetime import timedelta, datetime
+from zoneinfo import ZoneInfo
 from django.urls import reverse
 from django.utils import timezone
 import logging
@@ -972,88 +973,123 @@ def submit_activity_view(request, activity_id):
         with transaction.atomic():
             if responses:
                 for response in responses:
-                    # Get existing StudentItem
+                    item_id = response["item_id"]
+                    successes = response.get("successes", 0)
+                    continue_revision = response.get(
+                        "continue_revision", True
+                    )  # bool from frontend
+                    revise_at_str = response.get("revise_at")  # e.g., "2099-12-31"
+                    next_1 = response.get("next_1", 1)
+                    next_2 = response.get("next_2", 1)
+
                     try:
                         student_item = StudentItem.objects.get(
-                            student=student_profile, item_id=response["item_id"]
+                            student=student_profile, item_id=item_id
                         )
-                        current_next_1 = student_item.next_1
-                        current_next_2 = student_item.next_2
-                        current_revise_at = student_item.revise_at
                     except StudentItem.DoesNotExist:
-                        current_next_1 = 1
-                        current_next_2 = 1
-                        current_revise_at = None
+                        student_item = None
 
-                    # Determine if item is mastered
-                    is_master = response["successes"] >= 3
-
-                    # Initialize defaults
+                    # Default values
                     defaults = {
-                        "successes": response["successes"],
-                        "is_master": is_master,
+                        "successes": successes,
+                        "is_master": successes >= 3,
                         "updated_at": timezone.now(),
                     }
-                    # Update revision fields only for mastered items
-                    if is_master:
-                        if current_revise_at and timezone.now() < current_revise_at:
-                            # Review not due: extend revise_at, keep next_1 and next_2 unchanged
+
+                    # CASE 1: User clicked "Skip future revision" → trust frontend values completely
+                    if not continue_revision:
+                        # Convert revise_at string to timezone-aware datetime
+                        if revise_at_str:
+                            try:
+                                revise_at_dt = datetime.fromisoformat(revise_at_str)
+                                if revise_at_dt.tzinfo is None:
+                                    revise_at_dt = revise_at_dt.replace(
+                                        tzinfo=ZoneInfo("UTC")
+                                    )
+                            except ValueError:
+                                revise_at_dt = datetime(
+                                    2099, 12, 31, tzinfo=ZoneInfo("UTC")
+                                )
+                        else:
+                            revise_at_dt = datetime(
+                                2099, 12, 31, tzinfo=ZoneInfo("UTC")
+                            )
+
+                        defaults.update(
+                            {
+                                "continue_revision": False,
+                                "revise_at": revise_at_dt,
+                                "next_1": 9999,
+                                "next_2": 9999,
+                                "is_master": True,  # Skipped items are considered mastered
+                            }
+                        )
+
+                    # CASE 2: Normal practice → apply spaced repetition logic
+                    else:
+                        current_next_1 = student_item.next_1 if student_item else 1
+                        current_next_2 = student_item.next_2 if student_item else 1
+                        current_revise_at = (
+                            student_item.revise_at if student_item else None
+                        )
+
+                        is_master = successes >= 3
+
+                        if is_master:
+                            if current_revise_at and timezone.now() < current_revise_at:
+                                # Early review
+                                defaults.update(
+                                    {
+                                        "revise_at": timezone.now()
+                                        + timedelta(days=current_next_2),
+                                        "next_1": current_next_1,
+                                        "next_2": current_next_2,
+                                    }
+                                )
+                            else:
+                                # Normal progression
+                                defaults.update(
+                                    {
+                                        "revise_at": timezone.now()
+                                        + timedelta(days=current_next_2),
+                                        "next_1": current_next_2,
+                                        "next_2": current_next_1 + current_next_2,
+                                    }
+                                )
+                        else:
+                            # Not mastered yet
                             defaults.update(
                                 {
-                                    "revise_at": timezone.now()
-                                    + timedelta(days=current_next_2),
+                                    "revise_at": current_revise_at or timezone.now(),
                                     "next_1": current_next_1,
                                     "next_2": current_next_2,
                                 }
                             )
-                        else:
-                            # Review due/overdue or no revise_at: full update
-                            defaults.update(
-                                {
-                                    "revise_at": timezone.now()
-                                    + timedelta(days=current_next_2),
-                                    "next_1": current_next_2,
-                                    "next_2": current_next_1 + current_next_2,
-                                }
-                            )
-                    else:
-                        # Non-mastered: retain existing or default values
-                        defaults.update(
-                            {
-                                "revise_at": current_revise_at or timezone.now(),
-                                "next_1": current_next_1,
-                                "next_2": current_next_2,
-                            }
-                        )
 
-                    # Update or create StudentItem
-                    student_item, created = StudentItem.objects.update_or_create(
+                        defaults["continue_revision"] = True
+
+                    # Create or update the StudentItem
+                    student_item_obj, created = StudentItem.objects.update_or_create(
                         student=student_profile,
-                        item_id=response["item_id"],
+                        item_id=item_id,
                         defaults=defaults,
                     )
 
-                    # Set start_at for new items
                     if created:
-                        student_item.start_at = timezone.now()
-                        student_item.save()
+                        student_item_obj.start_at = timezone.now()
+                        student_item_obj.save()
 
-                # Update activity progress
-                total_items = Item.objects.filter(activity=activity).count()
-                mastered_items = StudentItem.objects.filter(
-                    student=student_profile, item__activity=activity, successes__gte=3
-                ).count()
+            # Update activity progress (count mastered + skipped items)
+            total_items = Item.objects.filter(activity=activity).count()
+            mastered_items = StudentItem.objects.filter(
+                student=student_profile,
+                item__activity=activity,
+                is_master=True,
+            ).count()
 
-                progress = (
-                    (mastered_items / total_items) * 100 if total_items > 0 else 0
-                )
-                completed_status = is_completed or progress >= 100
-            else:
-                # Non-exercise activities
-                progress = 0
-                completed_status = is_completed
+            progress = (mastered_items / total_items) * 100 if total_items > 0 else 0
+            completed_status = is_completed or progress >= 100
 
-            # Update StudentActivity
             StudentActivity.objects.update_or_create(
                 student=student_profile,
                 activity=activity,
