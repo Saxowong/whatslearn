@@ -12,6 +12,8 @@ from datetime import timedelta, datetime
 from zoneinfo import ZoneInfo
 from django.urls import reverse
 from django.utils import timezone
+import json
+from random import shuffle, sample
 import logging
 from django.db.models import (
     OuterRef,
@@ -38,9 +40,7 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
-import json
-import re
-from random import sample, shuffle
+
 from .models import (
     Course,
     Activity,
@@ -695,18 +695,22 @@ def course_view(request, course_id):
 
 @login_required
 def activity_view(request, activity_id):
-    # Get the activity and verify course enrollment
+    from random import shuffle
+    from django.utils import timezone
+    import json
+
     activity = get_object_or_404(
         Activity.objects.select_related("lesson__course"), pk=activity_id
     )
     lesson = activity.lesson
     course = lesson.course
-    # Verify enrollment
+
     if not StudentCourse.objects.filter(
         student=request.user.profile, course=course
     ).exists():
         raise PermissionDenied("You are not enrolled in this course")
-    # Get ALL activities in the course in lesson-order + activity-order
+
+    # Navigation: all activities in course
     all_activities = (
         Activity.objects.filter(lesson__course=course)
         .select_related("lesson")
@@ -732,232 +736,186 @@ def activity_view(request, activity_id):
         )
         .order_by("lesson__order", "order")
     )
-    # Assign global index across entire course
+
     counter = 1
     for a in all_activities:
         a.global_index = counter
         counter += 1
-    # Find previous and next activities
+
     previous_activity = None
     next_activity = None
     all_activities_list = list(all_activities)
     for i, a in enumerate(all_activities_list):
         if a.id == activity.id:
-            if i > 0:  # If not the first activity
+            if i > 0:
                 previous_activity = all_activities_list[i - 1]
-            if i < len(all_activities_list) - 1:  # If not the last activity
+            if i < len(all_activities_list) - 1:
                 next_activity = all_activities_list[i + 1]
             break
-    # Filter the RHS list to only current lesson’s activities, but keep global_index
+
     lesson_activities = [a for a in all_activities if a.lesson_id == lesson.id]
-    # Get or create StudentActivity record for this activity
+
     student_activity, created = StudentActivity.objects.get_or_create(
         student=request.user.profile,
         activity=activity,
         defaults={"progress": 0.0, "completed": False},
     )
-    mastered_items_count = 0
-    if activity.activity_type == "exercise":
-        total_items = activity.items.count()
-        mastered_items_count = StudentItem.objects.filter(
-            student=request.user.profile, item__activity=activity, is_master=True
-        ).count()
-        progress = (
-            (mastered_items_count / total_items) * 100 if total_items > 0 else 0.0
-        )
-        student_activity.progress = progress
-        student_activity.completed = progress >= 100
-        student_activity.save()
-    # Always update last accessed time
-    student_activity.updated_at = timezone.now()
-    student_activity.save(update_fields=["updated_at"])
+
     context = {
         "activity": activity,
         "student_activity": student_activity,
         "is_enrolled": True,
         "course_id": course.id,
-        "mastered_items_count": (
-            mastered_items_count if activity.activity_type == "exercise" else 0
-        ),
-        "progress_percentage": student_activity.progress,
         "activities": lesson_activities,
         "previous_activity": previous_activity,
         "next_activity": next_activity,
     }
+
     if activity.activity_type == "exercise":
-        items = list(activity.items.all())
-        student_items = {
-            si.item_id: si
-            for si in StudentItem.objects.filter(
-                student=request.user.profile, item__in=items
-            )
-        }
-        for item in items:
-            student_item = student_items.get(item.id)
-            item.successes = student_item.successes if student_item else 0
-            item.is_master = student_item.is_master if student_item else False
-            item.revise_at = student_item.revise_at if student_item else None
-            item.updated_at = student_item.updated_at if student_item else None
-            item.next_1 = student_item.next_1 if student_item else 1
-            item.next_2 = student_item.next_2 if student_item else 1
-            item.audio_play = item.audio_play or "start"
-            # Generate audio URL from question title if no audio file exists
+        # Get ALL items
+        all_items = list(activity.items.all())
+
+        # StudentItem data
+        student_items_qs = StudentItem.objects.filter(
+            student=request.user.profile, item__in=all_items
+        )
+        student_items_dict = {si.item_id: si for si in student_items_qs}
+
+        # Separate active vs skipped + attach attributes
+        active_items = []
+        skipped_items = []
+        for item in all_items:
+            si = student_items_dict.get(item.id)
+            item.successes = si.successes if si else 0
+            item.is_master = si.is_master if si else False
+            item.continue_revision = si.continue_revision if si else True
+            item.revise_at = si.revise_at if si else None
+            item.next_1 = si.next_1 if si else 1
+            item.next_2 = si.next_2 if si else 1
+            item.audio_play = getattr(item, "audio_play", "start")
+
+            # Audio URL logic
             if not item.audio and item.title:
-                # Assume question contains the title (e.g., "cat")
-                # Strip HTML tags and get first word for simplicity
                 from django.utils.html import strip_tags
 
-                question_text = strip_tags(item.title).strip().lower()
-                # Take the first word of the question as the title
-                title = question_text.split()[0] if question_text else ""
-                if title:
-                    # Construct URL: http://127.0.0.1:8000/media/mp3/c/cat.mp3
-                    item.audio_url = (
-                        f"http://127.0.0.1:8000/media/mp3/{title[0]}/{title}.mp3"
-                    )
-                else:
-                    item.audio_url = ""
+                text = strip_tags(item.title).strip().lower()
+                first_word = text.split()[0] if text else ""
+                item.audio_url = (
+                    f"/media/mp3/{first_word[0]}/{first_word}.mp3" if first_word else ""
+                )
             else:
                 item.audio_url = item.audio.url if item.audio else ""
-            logger.debug(
-                f"Processing item ID: {item.id}, Type: {item.item_type}, Question: {item.question}, Audio Play: {item.audio_play}, Number Answers: {item.number_answers}, Audio URL: {item.audio_url}"
-            )
-            logger.debug(
-                f"Answers: answer1={getattr(item, 'answer1', None)}, answer2={getattr(item, 'answer2', None)}, answer3={getattr(item, 'answer3', None)}, answer4={getattr(item, 'answer4', None)}"
-            )
+
+            if item.continue_revision:
+                active_items.append(item)
+            else:
+                skipped_items.append(item)
+
+        # Select up to 10 for this round
+        selected_items = active_items[:10]
+        if len(selected_items) < 10:
+            needed = 10 - len(selected_items)
+            selected_items.extend(skipped_items[:needed])
+
+        # Shuffle and prepare options for selected items
+        for item in selected_items:
             if item.item_type == "mc":
-                options = [
-                    getattr(item, "answer1", ""),
-                    getattr(item, "answer2", ""),
-                    getattr(item, "answer3", ""),
-                    getattr(item, "answer4", ""),
-                ]
-                options = [opt for opt in options if opt and opt.strip() != ""]
+                options = [getattr(item, f"answer{i}", "") for i in range(1, 5)]
+                options = [o.strip() for o in options if o.strip()]
                 shuffle(options)
                 item.options = options
                 item.correct_answer = item.answer or ""
                 item.correct_sequence_json = json.dumps([])
                 item.number_answers = 0
-                logger.debug(
-                    f"MC Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}"
-                )
+
             elif item.item_type == "blank":
-                # Use number_answers from the item
-                question_blanks = item.number_answers or 0
-                if question_blanks < 1 or question_blanks > 4:
-                    logger.error(
-                        f"Item ID: {item.id} has invalid blank count: {question_blanks}"
-                    )
-                    item.correct_sequence = []
+                blanks = item.number_answers or 0
+                if not (1 <= blanks <= 4):
                     item.options = []
                     item.correct_sequence_json = json.dumps([])
                     item.number_answers = 0
                     continue
-                # Collect correct answers based on number_answers
-                correct_sequence = [
-                    str(getattr(item, f"answer{i}", ""))
-                    for i in range(1, question_blanks + 1)
-                    if getattr(item, f"answer{i}", "")
-                    and str(getattr(item, f"answer{i}", "")).strip()
+                correct_seq = [
+                    getattr(item, f"answer{i}", "").strip()
+                    for i in range(1, blanks + 1)
+                    if getattr(item, f"answer{i}", "").strip()
                 ]
-                if len(correct_sequence) != question_blanks:
-                    logger.warning(
-                        f"Item ID: {item.id} has {question_blanks} blanks but {len(correct_sequence)} valid answers: {correct_sequence}"
-                    )
-                    item.correct_sequence = []
-                    item.options = []
-                    item.correct_sequence_json = json.dumps([])
-                    item.number_answers = 0
-                    continue
-                # Generate options: correct answers (answer1 to answerN) plus distractors (answer{N+1} to answer4)
-                options = correct_sequence.copy()
-                # Add distractors from answer{N+1} to answer4
                 distractors = [
-                    str(getattr(item, f"answer{i}", ""))
-                    for i in range(question_blanks + 1, 5)
-                    if getattr(item, f"answer{i}", "")
-                    and str(getattr(item, f"answer{i}", "")).strip()
+                    getattr(item, f"answer{i}", "").strip()
+                    for i in range(blanks + 1, 5)
+                    if getattr(item, f"answer{i}", "").strip()
                 ]
-                num_distractors_needed = max(0, 4 - len(options))
-                # Add distractors from other items if needed
-                if len(distractors) < num_distractors_needed:
-                    other_answers = []
-                    for i in items:
-                        if i.id != item.id:
-                            for j in range(1, 5):
-                                ans = getattr(i, f"answer{j}", "")
-                                if (
-                                    ans
-                                    and ans.strip()
-                                    and ans not in correct_sequence
-                                    and ans not in distractors
-                                ):
-                                    other_answers.append(ans)
-                    other_distractors = sample(
-                        other_answers,
-                        min(
-                            num_distractors_needed - len(distractors),
-                            len(other_answers),
-                        ),
-                    )
-                    distractors.extend(other_distractors)
-                # Fill remaining slots with generic distractors
-                if len(distractors) < num_distractors_needed:
+                options = correct_seq[:]
+                needed = max(0, 4 - len(options))
+                if len(distractors) < needed:
                     distractors.extend(
                         [
                             f"Option {i}"
-                            for i in range(
-                                1, num_distractors_needed - len(distractors) + 1
-                            )
+                            for i in range(1, needed + 1 - len(distractors) + 1)
                         ]
                     )
-                options.extend(distractors[:num_distractors_needed])
+                options.extend(distractors[:needed])
                 shuffle(options)
                 item.options = options
-                item.correct_answer = ""
-                item.correct_sequence = correct_sequence
-                try:
-                    item.correct_sequence_json = json.dumps(correct_sequence)
-                except (TypeError, ValueError) as e:
-                    logger.error(
-                        f"JSON serialization failed for item ID: {item.id}, Correct Sequence: {correct_sequence}, Error: {e}"
-                    )
-                    item.correct_sequence_json = json.dumps([])
-                item.number_answers = question_blanks
-                logger.debug(
-                    f"Blank Item ID: {item.id}, Blanks: {question_blanks}, Options: {item.options}, Correct Sequence: {correct_sequence}, JSON: {item.correct_sequence_json}"
-                )
-            else:
-                # For card
-                wrong_answers = [
+                item.correct_sequence = correct_seq
+                item.correct_sequence_json = json.dumps(correct_seq)
+                item.number_answers = blanks
+
+            else:  # card type
+                wrong = [
                     i.answer
-                    for i in items
+                    for i in all_items
                     if i.id != item.id and i.answer and i.answer != item.answer
                 ]
-                if len(wrong_answers) < 3:
-                    wrong_answers.extend(
-                        ["Alternative option 1", "Alternative option 2"][
-                            : 3 - len(wrong_answers)
+                if len(wrong) < 3:
+                    wrong.extend(
+                        ["Alternative 1", "Alternative 2", "Alternative 3"][
+                            : 3 - len(wrong)
                         ]
                     )
-                selected_wrong = sample(wrong_answers, 3)
-                options = [item.answer or ""] + selected_wrong
+                wrongs = wrong[:3]
+                shuffle(wrongs)
+                options = [item.answer or ""] + wrongs
                 shuffle(options)
                 item.options = options
                 item.correct_answer = item.answer or ""
                 item.correct_sequence_json = json.dumps([])
                 item.number_answers = 0
-                logger.debug(
-                    f"Card Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}"
-                )
-        context["items"] = items
+
+        # === OVERALL MASTERY FOR WELCOME BLOCK (includes skipped) ===
+        total_items_all = len(all_items)
+        mastered_total = sum(
+            1
+            for item in all_items
+            if student_items_dict.get(item.id) and student_items_dict[item.id].is_master
+        )
+
+        # Internal progress (optional: only active items)
+        total_active = len(active_items)
+        mastered_active = sum(1 for item in active_items if item.is_master)
+        progress = (mastered_active / total_active) * 100 if total_active > 0 else 100
+        student_activity.progress = progress
+        student_activity.completed = total_active == 0 or progress >= 100
+        student_activity.updated_at = timezone.now()
+        student_activity.save()
+
+        # Pass to template
+        context.update(
+            {
+                "items": selected_items,
+                "mastered_items_count": mastered_total,  # 10 out of 20
+                "total_items": total_items_all,  # 20
+            }
+        )
         template_name = "course/exercise_activity.html"
+
     elif activity.activity_type == "video":
         template_name = "course/video_activity.html"
     elif activity.activity_type == "pdf":
         template_name = "course/pdf_activity.html"
     else:
         template_name = "course/html_activity.html"
+
     return render(request, template_name, context)
 
 

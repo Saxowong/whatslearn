@@ -1,10 +1,13 @@
 {% extends "course/activity_detail.html" %}
 {% load static %}
+
 {% block extra_head %}
     <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
 {% endblock %}
+
 {% block activity_content %}
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
 <audio id="audio-correct" preload="auto">
     <source src="/media/audio/correct.mp3" type="audio/mpeg">
 </audio>
@@ -15,24 +18,27 @@
 <div class="card" style="border: none;">
     <div class="card-body" style="padding:0px;">
         <div class="activity-content">
+
             <!-- Welcome Block -->
             <div id="welcomeBlock" class="text-center welcome-block p-4 mb-2 rounded">
                 <div class="activity-description mb-5 text-start">
-                    <p>This exercise has {{ activity.items.count }} question{{ activity.items.count|pluralize }}.</p>
+                    <p>This exercise has {{ total_items }} question{{ total_items|pluralize }}.</p>
                 </div>
                 <div class="progress-container mb-5">
                     <div class="d-flex justify-content-between mb-1">
                         <span>Mastery Progress</span>
-                        <span id="masteredCount">{{ mastered_items_count }} / {{ items|length }}</span>
+                        <span id="masteredCount">{{ mastered_items_count }} / {{ total_items }}</span>
                     </div>
                     <div class="progress" style="height: 20px;">
                         <div class="progress-bar bg-primary"
                              role="progressbar"
-                             style="width: {% widthratio mastered_items_count items|length 100 %}%"
-                             aria-valuenow="{% widthratio mastered_items_count items|length 100 %}"
+                             style="width: {% widthratio mastered_items_count total_items 100 %}%;"
+                             aria-valuenow="{% widthratio mastered_items_count total_items 100 %}"
                              aria-valuemin="0"
                              aria-valuemax="100">
-                            <span class="progress-percentage" id="overallProgress">{% widthratio mastered_items_count items|length 100 %}%</span>
+                            <span class="progress-percentage" id="overallProgress">
+                                {% widthratio mastered_items_count total_items 100 %}%
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -52,18 +58,22 @@
                     <div class="question-card d-none"
                          data-item-id="{{ item.id }}"
                          data-item-successes="{{ item.successes|default:0 }}"
+                         data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
+                         data-item-continuerevision="{% if item.continue_revision %}true{% else %}false{% endif %}"
+                         data-item-reviseat="{{ item.revise_at|default:'' }}"
+                         data-item-next1="{{ item.next_1|default:1 }}"
+                         data-item-next2="{{ item.next_2|default:1 }}"
+                         data-item-audioplay="{{ item.audio_play|default:'start' }}"
+                         data-item-correct-answer="{{ item.correct_answer|default:'' }}"
+                         data-item-correct-sequence-json="{{ item.correct_sequence_json|default:'' }}"
+                         data-item-number-answers="{{ item.number_answers|default:0 }}"
                          data-item-answer1="{{ item.answer1|default:'' }}"
                          data-item-answer2="{{ item.answer2|default:'' }}"
                          data-item-answer3="{{ item.answer3|default:'' }}"
-                         data-item-answer4="{{ item.answer4|default:'' }}"
-                         data-item-number-answers="{{ item.number_answers|default:1 }}"
-                         data-item-is-master="{% if item.is_master %}true{% else %}false{% endif %}"
-                         data-item-audioplay="{{ item.audio_play|default:'start' }}"
-                         data-item-correct-answer="{{ item.correct_answer|default:'' }}">
+                         data-item-answer4="{{ item.answer4|default:'' }}">
 
                         <div class="question-content mb-2 position-relative">
                             <center><h3 class="feedback-result d-none mb-3"></h3></center>
-
                             <div class="question-text fs-5 mb-2">
                                 <div>{{ item.title|safe }}</div>
                                 {% if item.item_type == 'blank' %}
@@ -84,10 +94,9 @@
                             </audio>
                             {% endif %}
 
-                            <!-- Feedback Answer (without skip link) -->
                             <div class="feedback-answer d-none mt-4 mb-3">
-                                {% if item.audio %}
-                                <div class="position-absolute top-0 start-0 mt-2 ms-2">
+                                {% if item.audio_url %}
+                                <div class="position-absolute top-0 end-0 mt-2 me-2">
                                     <i class="bi bi-volume-up fs-2 text-primary feedback-audio-icon d-none" style="cursor: pointer;"></i>
                                 </div>
                                 {% endif %}
@@ -95,7 +104,6 @@
                                 <p class="correct-answer-text fs-5 text-primary mb-2"></p>
                             </div>
 
-                            <!-- Skip Revision Button (outside feedback-answer) -->
                             <div class="text-end mt-3 d-none skip-revision-container">
                                 <a href="#" class="skip-revision btn btn-sm btn-outline-primary">
                                     Skip future revision
@@ -110,15 +118,22 @@
                             </div>
                             {% for option in item.options %}
                             <div class="col-6">
-                                <button type="button" class="btn btn-outline-primary w-100 answer-btn"
-                                        data-option="{{ option|default:'' }}">
-                                    {{ option|default:'' }}
+                                <button type="button" class="btn btn-outline-primary w-100 answer-btn" data-option="{{ option }}">
+                                    {{ option }}
                                 </button>
                             </div>
                             {% endfor %}
+                            {% if item.options|length < 4 %}
+                                {% for _ in "xxxx"|slice:":4"|make_list %}
+                                    {% if forloop.counter > item.options|length %}
+                                    <div class="col-6 d-none">
+                                        <button type="button" class="btn btn-outline-primary w-100 answer-btn"></button>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
                         </div>
 
-                        <!-- Continue / Stop Buttons -->
                         <div class="feedback-buttons d-none mt-3 d-flex justify-content-center gap-2">
                             <button type="button" class="btn btn-primary continue-btn">Continue</button>
                             <button type="button" class="btn btn-secondary stop-btn">Stop</button>
@@ -139,8 +154,7 @@
                                     <span class="ms-3 h5 correct-count">0/10</span>
                                 </div>
                                 <div class="d-flex justify-content-center gap-3">
-                                    <button class="btn btn-success btn-lg" id="continueButton">Continue</button>
-                                    <button class="btn btn-outline-secondary btn-lg" id="stopButton">View Results</button>
+                                    <button class="btn btn-outline-secondary btn-lg" id="stopButton">View Progress</button>
                                 </div>
                             </div>
                         </div>
@@ -158,15 +172,14 @@
     .question-card { min-height: 330px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid var(--bs-card-border-color); border-radius: 0.25rem; padding: 15px; }
     .question-content { position: relative; padding-top: 10px; }
     .answer-buttons button { white-space: normal; height: 100%; min-height: 40px; font-size: 1.1em; }
-    .correct-answer { background-color: #d4edda !important; border-color: #28a745 !important; }
-    .incorrect-answer { background-color: #f8d7da !important; border-color: #dc3545 !important; }
+    .correct-answer { background-color: #d4edda !important; border-color: #28a745 !important; color: #155724 !important; }
+    .incorrect-answer { background-color: #f8d7da !important; border-color: #dc3545 !important; color: #721c24 !important; }
     .feedback-result.correct { color: #28a745; font-weight: 600; }
     .feedback-result.incorrect { color: #dc3545; font-weight: 600; }
     .progress-container { max-width: 500px; margin: 0 auto; }
     .bi-volume-up { color: #0d6efd; transition: opacity 0.2s; }
     .bi-volume-up:hover { opacity: 0.8; }
     .selected-answer { border-width: 2px !important; }
-
     .skip-revision-container { z-index: 100; }
     .skip-revision:hover { background-color: rgba(13, 110, 253, 0.1); }
 </style>
@@ -208,47 +221,52 @@ $(document).ready(function() {
 
     function initializeLists() {
         items = $('.question-card').map(function() {
-            const numberAnswers = parseInt($(this).data('item-number-answers')) || 1;
-            const correctAnswer = $(this).data('item-correct-answer') || '';
+            const $card = $(this);
+            const numberAnswers = parseInt($card.data('item-number-answers')) || 1;
             let correctAnswers = [];
-            for (let i = 1; i <= numberAnswers; i++) {
-                const ans = $(this).data(`item-answer${i}`);
-                if (ans) correctAnswers.push(ans);
+
+            // Try to parse correct-sequence first
+            try {
+                correctAnswers = JSON.parse($card.data('item-correct-sequence') || '[]');
+            } catch(e) {}
+
+            // If empty, build from answer1-answer4
+            if (correctAnswers.length === 0 && numberAnswers > 0) {
+                for (let i = 1; i <= numberAnswers; i++) {
+                    const ans = $card.data(`item-answer${i}`);
+                    if (ans && ans.trim()) correctAnswers.push(ans.trim());
+                }
             }
-            if (numberAnswers === 1 && correctAnswer && !correctAnswers.includes(correctAnswer)) {
-                correctAnswers = [correctAnswer];
+
+            // Final fallback
+            if (correctAnswers.length === 0) {
+                const ca = $card.data('item-correct-answer');
+                if (ca) correctAnswers = [ca];
             }
-            const isFillInTheBlank = numberAnswers > 1 || (correctAnswers.length > 0 && !correctAnswer);
-            const continueRevision = $(this).data('item-continuerevision');
-            const isSkipped = continueRevision === false || String($(this).data('item-reviseat')).startsWith('2099');
 
             return {
-                id: $(this).data('item-id'),
-                successes: $(this).data('item-successes') || 0,
-                is_master: $(this).data('item-is-master') === true,
+                id: $card.data('item-id'),
+                successes: parseInt($card.data('item-successes') || 0),
+                is_master: $card.data('item-is-master') === true,
+                continue_revision: $card.data('item-continuerevision') !== false,
                 correctAnswers: correctAnswers,
                 numberAnswers: numberAnswers,
-                original_question: $(this).find('.question-text').html(),
-                audio_play: $(this).data('item-audioplay') || 'start',
+                original_question: $card.find('.question-text').html(),
+                audio_play: $card.data('item-audioplay') || 'start',
                 element: this,
-                isFillInTheBlank: isFillInTheBlank,
-                continue_revision: continueRevision !== false,
-                revise_at: $(this).data('item-reviseat') || null,
-                next_1: $(this).data('item-next1') || 0,
-                next_2: $(this).data('item-next2') || 0,
-                isSkippedPermanently: isSkipped
+                isFillInTheBlank: $card.data('item-number-answers') > 1
             };
         }).get();
 
-        items = items.filter(item => !item.isSkippedPermanently);
-        newList = items.filter(i => i.successes === 0);
-        workingList = items.filter(i => i.successes >= 1 && i.successes <= 2);
-        masterList = items.filter(i => i.successes >= 3);
-        workingList = shuffleArray(workingList);
+        newList = items.filter(i => i.successes === 0 && i.continue_revision);
+        workingList = items.filter(i => i.successes > 0 && i.successes < 3 && i.continue_revision);
+        masterList = items.filter(i => i.successes >= 3 || !i.continue_revision);
 
+        workingList = shuffleArray(workingList);
         while (workingList.length < WORKING_LIMIT && newList.length > 0) {
             workingList.push(newList.shift());
         }
+
         correctCount = 0;
         recentlyShownIds = [];
     }
@@ -263,7 +281,9 @@ $(document).ready(function() {
             showRoundCompletion();
             return;
         }
-        currentItem = shuffleArray(pool.filter(item => !recentlyShownIds.includes(item.id)))[0] || pool[0];
+        const available = pool.filter(i => !recentlyShownIds.includes(i.id));
+        currentItem = (available.length > 0 ? available : pool)[Math.floor(Math.random() * pool.length)];
+
         newList = newList.filter(i => i.id !== currentItem.id);
         workingList = workingList.filter(i => i.id !== currentItem.id);
         masterList = masterList.filter(i => i.id !== currentItem.id);
@@ -300,22 +320,21 @@ $(document).ready(function() {
         $card.find('.question-audio-icon').removeClass('d-none');
         $card.find('.feedback-audio-icon').addClass('d-none');
         $card.find('.skip-revision').text('Skip future revision')
-               .removeClass('btn-success disabled')
-               .addClass('btn-outline-primary');
+            .removeClass('btn-success disabled')
+            .addClass('btn-outline-primary');
         $card.find('.question-text').html(currentItem.original_question);
     }
 
     function reshuffleOptions(item) {
-        const $btns = $(item.element).find('.answer-btn');
+        const $btns = $(item.element).find('.answer-btn:visible');
         let opts = $btns.map(function() { return $(this).data('option'); }).get();
-        if (opts.length <= 1) return;
-        shuffleArray(opts);
+        if (opts.length > 1) shuffleArray(opts);
         $btns.each(function(i) {
             $(this).text(opts[i]).data('option', opts[i]);
         });
     }
 
-    function showFeedback(isCorrect, text, callback) {
+    function showFeedback(isCorrect, callback) {
         const $card = $(currentItem.element);
         $card.find('.answer-buttons, .not-sure-link').addClass('d-none');
         $card.find('.feedback-result')
@@ -329,8 +348,7 @@ $(document).ready(function() {
         let answerLine = '';
         if (currentItem.isFillInTheBlank) {
             const blankMatch = currentItem.original_question.match(/<div[^>]*>[\s\S]*?<\/div>\s*<div[^>]*>([\s\S]*?)<\/div>/);
-            const blankText = blankMatch ? blankMatch[1] : '';
-            let filled = blankText;
+            let filled = blankMatch ? blankMatch[1] : '';
             currentItem.correctAnswers.forEach(ans => {
                 filled = filled.replace(/_{3,}/, `<label class="text-primary">${ans}</label>`);
             });
@@ -344,17 +362,16 @@ $(document).ready(function() {
         `);
 
         $card.find('.feedback-answer, .feedback-buttons').removeClass('d-none');
-
         if (isCorrect) {
             $card.find('.skip-revision-container').removeClass('d-none');
         }
-
         $card.find('.question-audio-icon').addClass('d-none');
         $card.find('.feedback-audio-icon').removeClass('d-none');
 
         const audio = isCorrect ? $('#audio-correct')[0] : $('#audio-wrong')[0];
         audio.currentTime = 0;
         audio.play().catch(() => {});
+
         if (currentItem.audio_play === 'end' || currentItem.audio_play === 'both') {
             const qAudio = $card.find('.question-audio')[0];
             if (qAudio) qAudio.currentTime = 0, qAudio.play().catch(() => {});
@@ -362,113 +379,20 @@ $(document).ready(function() {
 
         $card.find('.continue-btn').off('click').on('click', callback);
         $card.find('.stop-btn').off('click').on('click', () => saveProgress());
+
         if (isCorrect) triggerConfetti();
     }
 
-    function handleAnswer($btn) {
-        const selected = $btn.data('option');
-        const correct = currentItem.correctAnswers[0];
-        const isCorrect = selected === correct;
-        $btn.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'))
-            .siblings().removeClass('selected-answer correct-answer incorrect-answer');
-
-        if (isCorrect) {
-            if (correctCount < MAX_ITEMS_PER_ROUND) correctCount++;
-            currentItem.successes++;
-            if (currentItem.successes >= 3) {
-                currentItem.is_master = true;
-                masterList.push(currentItem);
-                if (newList.length > 0 && workingList.length < WORKING_LIMIT) {
-                    workingList.push(newList.shift());
-                }
-            } else {
-                workingList.push(currentItem);
-                workingList = shuffleArray(workingList);
-            }
-            showFeedback(true, '', () => processNextItem());
-        } else {
-            workingList.push(currentItem);
-            workingList = shuffleArray(workingList);
-            showFeedback(false, '', () => {
-                reshuffleOptions(currentItem);
-                processNextItem();
-            });
-        }
-    }
-
-    function handleFillInTheBlank($btn) {
-        const selected = $btn.data('option');
-        const $card = $(currentItem.element);
-        const correctAnswer = $card.data(`item-answer${answerIndex}`);
-        const isCorrect = selected === correctAnswer;
-        $btn.addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'))
-            .siblings().removeClass('selected-answer correct-answer incorrect-answer');
-
-        if (isCorrect) {
-            const $text = $card.find('.question-text');
-            let html = $text.html();
-            const match = html.match(/_{3,}/);
-            if (match) {
-                const start = match.index;
-                const end = start + match[0].length;
-                html = html.substring(0, start) + `<span class="text-primary">${selected}</span>` + html.substring(end);
-                $text.html(html);
-            }
-            if (answerIndex >= numberOfAnswers) {
-                if (correctCount < MAX_ITEMS_PER_ROUND) correctCount++;
-                currentItem.successes++;
-                if (currentItem.successes >= 3) {
-                    currentItem.is_master = true;
-                    masterList.push(currentItem);
-                    if (newList.length > 0 && workingList.length < WORKING_LIMIT) {
-                        workingList.push(newList.shift());
-                    }
-                } else {
-                    workingList.push(currentItem);
-                    workingList = shuffleArray(workingList);
-                }
-                showFeedback(true, '', () => processNextItem());
-            } else {
-                answerIndex++;
-                isProcessingClick = false;
-            }
-        } else {
-            workingList.push(currentItem);
-            workingList = shuffleArray(workingList);
-            showFeedback(false, '', () => {
-                reshuffleOptions(currentItem);
-                processNextItem();
-            });
-        }
-    }
-
     function saveProgress() {
-        console.log("saveProgress called");
-        console.log("Total items:", items.length);
-
-        const responses = items.map(item => {
-            const response = {
-                item_id: item.id,
-                successes: item.successes || 0,
-                continue_revision: item.continue_revision === false ? false : true,  // Explicit boolean
-                is_master: item.is_master || false,
-                revise_at: item.revise_at || null,
-                next_1: item.next_1 || 0,
-                next_2: item.next_2 || 0
-            };
-            console.log(`Item ${item.id}: continue_revision = ${response.continue_revision}`);
-            return response;
-        });
-
-        console.log("Final responses JSON:", JSON.stringify(responses));
-
+        const responses = items.map(item => ({
+            item_id: item.id,
+            successes: item.successes,
+            continue_revision: item.continue_revision,
+            is_master: item.is_master
+        }));
+        const allMastered = items.every(i => i.is_master || !i.continue_revision);
         $('#responses').val(JSON.stringify(responses));
-
-        const allMastered = items.every(i => i.successes >= 3 || i.continue_revision === false);
         $('#is_completed').val(allMastered ? 'true' : 'false');
-
-        alert("Submitting progress...\nCheck browser console (F12) for the exact data being sent!");
-
         $('#exerciseForm').submit();
     }
 
@@ -494,57 +418,86 @@ $(document).ready(function() {
     $(document).on('click', '.answer-btn', function() {
         if (isProcessingClick || !currentItem) return;
         isProcessingClick = true;
+
+        const selected = $(this).data('option');
+
         if (currentItem.isFillInTheBlank) {
-            handleFillInTheBlank($(this));
+            const correctAnswer = $(currentItem.element).data(`item-answer${answerIndex}`);
+            const isCorrect = selected === correctAnswer;
+
+            $(this).addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'))
+                .siblings().removeClass('selected-answer correct-answer incorrect-answer');
+
+            if (isCorrect) {
+                const $text = $(currentItem.element).find('.question-text');
+                let html = $text.html();
+                const match = html.match(/_{3,}/);
+                if (match) {
+                    const start = match.index;
+                    const end = start + match[0].length;
+                    html = html.substring(0, start) + `<span class="text-primary">${selected}</span>` + html.substring(end);
+                    $text.html(html);
+                }
+
+                if (answerIndex >= numberOfAnswers) {
+                    correctCount++;
+                    currentItem.successes++;
+                    if (currentItem.successes >= 3) currentItem.is_master = true;
+                    showFeedback(true, () => processNextItem());
+                } else {
+                    answerIndex++;
+                    isProcessingClick = false;
+                }
+            } else {
+                currentItem.successes = 0;
+                showFeedback(false, () => {
+                    reshuffleOptions(currentItem);
+                    processNextItem();
+                });
+            }
         } else {
-            handleAnswer($(this));
+            const correct = currentItem.correctAnswers[0];
+            const isCorrect = selected === correct;
+
+            $(this).addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'))
+                .siblings().removeClass('selected-answer correct-answer incorrect-answer');
+
+            if (isCorrect) {
+                correctCount++;
+                currentItem.successes++;
+                if (currentItem.successes >= 3) currentItem.is_master = true;
+                showFeedback(true, () => processNextItem());
+            } else {
+                currentItem.successes = 0;
+                showFeedback(false, () => {
+                    reshuffleOptions(currentItem);
+                    processNextItem();
+                });
+            }
         }
     });
 
     $(document).on('click', '.not-sure-link', function(e) {
         e.preventDefault();
-        if (!currentItem || isProcessingClick) return;
+        if (isProcessingClick || !currentItem) return;
         isProcessingClick = true;
-        workingList.push(currentItem);
-        workingList = shuffleArray(workingList);
-        showFeedback(false, '', () => {
+        currentItem.successes = 0;
+        showFeedback(false, () => {
             reshuffleOptions(currentItem);
             processNextItem();
-            isProcessingClick = false;
         });
     });
 
     $(document).on('click', '.skip-revision', function(e) {
         e.preventDefault();
-
-        if (!currentItem || isProcessingClick) {
-            // Force allow skip
-            isProcessingClick = false;
-        }
-
+        if (!currentItem || isProcessingClick) return;
         isProcessingClick = true;
 
         currentItem.continue_revision = false;
         currentItem.successes = 10;
         currentItem.is_master = true;
-        currentItem.revise_at = '2099-12-31';
-        currentItem.next_1 = 9999;
-        currentItem.next_2 = 9999;
-
-        $(currentItem.element)
-            .attr('data-item-continuerevision', 'false')
-            .attr('data-item-successes', '10')
-            .attr('data-item-is-master', 'true')
-            .attr('data-item-reviseat', '2099-12-31')
-            .attr('data-item-next1', '9999')
-            .attr('data-item-next2', '9999');
 
         if (correctCount < MAX_ITEMS_PER_ROUND) correctCount++;
-
-        newList = newList.filter(i => i.id !== currentItem.id);
-        workingList = workingList.filter(i => i.id !== currentItem.id);
-        masterList = masterList.filter(i => i.id !== currentItem.id);
-        recentlyShownIds = recentlyShownIds.filter(id => id !== currentItem.id);
 
         $(this).text('Mastered!')
             .removeClass('btn-outline-primary')
@@ -553,15 +506,9 @@ $(document).ready(function() {
 
         triggerConfetti();
 
-        $(currentItem.element).find('.feedback-buttons, .feedback-answer, .skip-revision-container').addClass('d-none');
-
-        processNextItem();
-    });
-
-    $('#continueButton').on('click', function() {
-        $('#feedbackModal').modal('hide');
-        initializeLists();
-        processNextItem();
+        setTimeout(() => {
+            processNextItem();
+        }, 500);
     });
 
     $('#stopButton').on('click', function() {
@@ -576,4 +523,5 @@ $(document).ready(function() {
     });
 });
 </script>
+
 {% endblock %}
