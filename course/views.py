@@ -811,11 +811,46 @@ def activity_view(request, activity_id):
             else:
                 skipped_items.append(item)
 
-        # Select up to 10 for this round
-        selected_items = active_items[:10]
+        # ======================
+        # NEW: SORT ACTIVE ITEMS BY YOUR PRIORITY RULES
+        # Priority 1: Started but not mastered (successes 1 or 2)
+        # Priority 2: Not started (successes 0)
+        # Priority 3: Mastered (successes >=3 or is_master=True)
+        # ======================
+        def get_priority_key(item):
+            # Define priority tiers (lower number = higher priority)
+            if 1 <= item.successes <= 2:
+                return 0  # Highest priority (started but not mastered)
+            elif item.successes == 0:
+                return 1  # Second priority (not started)
+            else:
+                return 2  # Lowest priority (mastered)
+
+        # Sort active items by priority tier, then by successes (ascending)
+        active_items_sorted = sorted(
+            active_items,
+            key=lambda x: (
+                get_priority_key(x),  # Main priority tier
+                x.successes,  # Within tier: fewer successes first
+            ),
+        )
+
+        # Select up to 10 from sorted active items
+        selected_items = active_items_sorted[:10]
+
+        # If still need more items (active items < 10), add from skipped items
         if len(selected_items) < 10:
             needed = 10 - len(selected_items)
+            # Shuffle skipped items to avoid bias when adding
+            shuffle(skipped_items)
             selected_items.extend(skipped_items[:needed])
+
+        # Optional: Shuffle selected items to avoid predictable order (keeps priority logic intact)
+        shuffle(selected_items)
+
+        # ======================
+        # END NEW PRIORITY LOGIC
+        # ======================
 
         # Shuffle and prepare options for selected items
         for item in selected_items:
@@ -890,12 +925,12 @@ def activity_view(request, activity_id):
             if student_items_dict.get(item.id) and student_items_dict[item.id].is_master
         )
 
-        # Internal progress (optional: only active items)
-        total_active = len(active_items)
-        mastered_active = sum(1 for item in active_items if item.is_master)
-        progress = (mastered_active / total_active) * 100 if total_active > 0 else 100
+        # Calculate progress (mastered items / total items) * 100
+        progress = (
+            (mastered_total / total_items_all) * 100 if total_items_all > 0 else 100
+        )
         student_activity.progress = progress
-        student_activity.completed = total_active == 0 or progress >= 100
+        student_activity.completed = progress >= 100  # Completed when 100% mastered
         student_activity.updated_at = timezone.now()
         student_activity.save()
 
@@ -903,8 +938,8 @@ def activity_view(request, activity_id):
         context.update(
             {
                 "items": selected_items,
-                "mastered_items_count": mastered_total,  # 10 out of 20
-                "total_items": total_items_all,  # 20
+                "mastered_items_count": mastered_total,
+                "total_items": total_items_all,
             }
         )
         template_name = "course/exercise_activity.html"
@@ -931,7 +966,7 @@ def submit_activity_view(request, activity_id):
         with transaction.atomic():
             if responses:
                 for response in responses:
-                    item_id = response["item_id"]
+                    item_id = response.get("item_id")
                     successes = response.get("successes", 0)
                     continue_revision = response.get(
                         "continue_revision", True
