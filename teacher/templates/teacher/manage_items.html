@@ -52,6 +52,21 @@
             <form id="reorderForm" method="POST" action="{% url 'teacher:manage_items' activity.id %}">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="reorder">
+                
+                <!-- NEW: Items Per Page Selection (added above the table) -->
+                <div class="row mb-3 align-items-center">
+                    <div class="col-md-6">
+                        <label for="itemsPerPage" class="form-label mb-0 me-2 d-inline-block">Items per page:</label>
+                        <select id="itemsPerPage" class="form-select form-select-sm d-inline-block w-auto">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="-1">All</option>
+                        </select>
+                    </div>
+                </div>
+                
                 <table id="itemsTable" class="table table-striped" aria-label="Items table">
                     <thead>
                         <tr>
@@ -91,14 +106,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td></td>
-                            <td></td>
-                            <td></td>
-                            <td>No items found</td>
-                            <td></td>
-                            <td></td>
-                            <td></td>
-                            <td></td>
+                            <td colspan="8" class="text-center">No items found</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -143,7 +151,7 @@
                             <input type="file" class="form-control" id="zip_file" name="zip_file" accept=".zip" required>
                             <br/>
                             <small class="form-text text-muted">Upload a ZIP file containing:<ol>
-                                <li>An <b>items.xlsx</b> file with columns: title, item_type, item_category, question, answer, answer1, answer2, answer3, answer4, image_filename, audio_filename.</li>
+                                <li>An <b>items.xlsx</b> file with columns: title, item_type, item_category, hint, question, answer, answer1, answer2, answer3, answer4, image_filename, audio_filename.</li>
                                 <li>For <b>item_type</b>: Use "card", "mc", or "blank".</li>
                                 <li>For <b>mc</b> items: Provide answer1, answer2, answer3, answer4, and specify the correct answer in the answer column.</li>
                                 <li>For <b>blank</b> items: Use 3+ underscores (e.g., ___) in the question for blanks, and provide answers in the answer column (comma-separated if multiple).</li>
@@ -187,6 +195,16 @@
         padding: 0;
         font-size: inherit;
     }
+    /* Style for Items Per Page dropdown (match DataTables/Bootstrap) */
+    #itemsPerPage {
+        margin-bottom: 0.25rem;
+        border-radius: 0.25rem;
+        border: 1px solid #ced4da;
+    }
+    .form-label.mb-0 {
+        font-weight: 500;
+        color: #6c757d;
+    }
 </style>
 {% endblock %}
 {% block extra_js %}
@@ -198,6 +216,7 @@
 <script>
 $(document).ready(function() {
     try {
+        // Initialize DataTable with default page length (25)
         const table = $('#itemsTable').DataTable({
             dom: '<"row"<"col-md-6"B><"col-md-6"f>>rt<"row"<"col-md-6"i><"col-md-6"p>>',
             buttons: [
@@ -215,6 +234,8 @@ $(document).ready(function() {
             ],
             responsive: true,
             order: [[0, 'asc']], // Sort by Order column
+            pageLength: 25, // Default items per page (matches dropdown selected value)
+            lengthChange: false, // Disable DataTables' default length change (we use custom dropdown)
             columnDefs: [
                 {
                     targets: 6, // Created At column
@@ -264,6 +285,15 @@ $(document).ready(function() {
                 console.log('DataTable initialized');
             }
         });
+
+        // NEW: Handle Items Per Page dropdown change
+        $('#itemsPerPage').on('change', function() {
+            const pageLength = parseInt($(this).val());
+            // Set DataTable page length (-1 = show all items)
+            table.page.len(pageLength === -1 ? Infinity : pageLength).draw();
+            console.log(`Items per page updated to: ${pageLength === -1 ? 'All' : pageLength}`);
+        });
+
         // Inline editing for order column
         $(document).on('click', '.editable-order', function() {
             try {
@@ -291,6 +321,7 @@ $(document).ready(function() {
                 console.error('Inline editing error:', e);
             }
         });
+
         // Delete item handler
         $(document).on('click', '.delete-item-btn', function() {
             try {

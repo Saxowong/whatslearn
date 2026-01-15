@@ -1,23 +1,23 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Max, Q
-from django.db import transaction, models
-import course
+from django.db import transaction
 from course.models import Course, Category, Lesson, Activity, Item, StudentCourse
 from dictionary.models import DictionaryItem
 from django.contrib import messages
 from user.models import Profile
 from django.urls import reverse
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.core.files.storage import default_storage
 from django.conf import settings
 from .forms import CourseForm, LessonForm, ActivityForm, ItemForm
 import os, zipfile
+from django.core.files import File  # <-- ADD THIS IMPORT
 import tempfile
-from io import TextIOWrapper, BytesIO
+from io import BytesIO
 import pandas as pd
-import uuid
-import re
-
+import uuid, re
 import logging
 
 logger = logging.getLogger(__name__)
@@ -410,30 +410,74 @@ def manage_activities(request, lesson_id):
 @login_required
 def edit_activity(request, lesson_id, activity_id=0):
     lesson = get_object_or_404(Lesson, id=lesson_id, course__teacher__user=request.user)
-    if activity_id:
-        activity = get_object_or_404(Activity, id=activity_id, lesson=lesson)
-    else:
-        activity = None
+    activity = (
+        get_object_or_404(Activity, id=activity_id, lesson=lesson)
+        if activity_id
+        else None
+    )
+
+    raw_srt_content = ""
+    if activity and activity.activity_type == "reading" and activity.html_content:
+        raw_srt_content = activity.html_content
 
     if request.method == "POST":
         form = ActivityForm(request.POST, request.FILES, instance=activity)
+
         if form.is_valid():
             activity = form.save(commit=False)
-            activity.lesson = lesson if not activity_id else activity.lesson
-            activity.save()  # Save to generate activity.id for pdf_media_path
+            activity.lesson = lesson
 
-            # Handle PDF file upload for pdf activities
+            # Save RAW SRT to html_content
+            if request.POST.get("activity_type") == "reading":
+                activity.html_content = request.POST.get("srt_content", "").strip()
+
+                # Save clean audio file (no activity prefix)
+                audio_file_url = request.POST.get("audio_file_url")
+                if audio_file_url and audio_file_url.startswith(settings.MEDIA_URL):
+                    audio_relative_path = audio_file_url.replace(
+                        settings.MEDIA_URL, ""
+                    ).lstrip("/")
+                    audio_file_path = os.path.join(
+                        settings.MEDIA_ROOT, audio_relative_path
+                    )
+
+                    if os.path.exists(audio_file_path):
+                        try:
+                            with open(audio_file_path, "rb") as f:
+                                django_file = File(f)
+                                # Extract JUST the original filename (no path/activity prefix)
+                                filename = os.path.basename(audio_file_path)
+                                activity.audio_file.save(
+                                    filename, django_file, save=False
+                                )
+                        except Exception as e:
+                            logger.error(f"Error saving audio: {str(e)}")
+
+                # Handle YouTube link conversion
+                youtube_link = request.POST.get("reading_youtube_link")
+                if youtube_link:
+                    youtube_pattern = r"(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([^&\n?]+)"
+                    video_id_match = re.search(youtube_pattern, youtube_link)
+                    if video_id_match:
+                        video_id = video_id_match.group(1)
+                        activity.video_embed_code = f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
+
+            # Save activity (includes clean audio file reference)
+            activity.save()
+
+            # Handle PDF upload (unchanged)
             if (
                 form.cleaned_data["activity_type"] == "pdf"
                 and "pdf_file" in request.FILES
             ):
-                old_pdf_path = activity.pdf_file.path if activity.pdf_file else None
-                if old_pdf_path and os.path.exists(old_pdf_path):
-                    try:
-                        os.remove(old_pdf_path)
-                        logger.info(f"Deleted old PDF: {old_pdf_path}")
-                    except Exception as e:
-                        logger.error(f"Error deleting old PDF: {str(e)}")
+                if activity.pdf_file:
+                    old_pdf_path = activity.pdf_file.path
+                    if os.path.exists(old_pdf_path):
+                        try:
+                            os.remove(old_pdf_path)
+                        except Exception as e:
+                            logger.error(f"PDF deletion error: {str(e)}")
+
                 pdf_file = request.FILES["pdf_file"]
                 media_path = os.path.join("courses", str(lesson.course.id))
                 full_media_path = os.path.join(settings.MEDIA_ROOT, media_path)
@@ -441,15 +485,7 @@ def edit_activity(request, lesson_id, activity_id=0):
                 filename = os.path.basename(pdf_file.name)
                 activity.pdf_file.save(os.path.join(media_path, filename), pdf_file)
 
-            # Log HTML content for exercise activities
-            if form.cleaned_data["activity_type"] == "html":
-                logger.info(
-                    f"Saving html_content for activity {activity.id or 'new'}: {form.cleaned_data['html_content'][:100]}..."
-                )
-
-            activity.save()
-
-            # Resequence orders after saving
+            # Resequence activities
             activities = Activity.objects.filter(lesson=lesson).order_by(
                 "order", "created_at"
             )
@@ -469,12 +505,69 @@ def edit_activity(request, lesson_id, activity_id=0):
         request,
         "teacher/edit_activity.html",
         {
-            "activity": activity or {},
+            "activity": activity,
             "lesson": lesson,
             "error": error,
             "form": form,
             "activity_types": Activity.ACTIVITY_TYPES,
+            "raw_srt_content": raw_srt_content,
         },
+    )
+
+
+# Keep your existing upload_audio view (ensure it's also properly imported)
+@csrf_exempt
+def upload_audio(request):
+    if request.method == "POST" and request.FILES.get("audio_file"):
+        try:
+            # Get file and metadata
+            audio_file = request.FILES["audio_file"]
+            lesson_id = request.POST.get("lesson_id")
+
+            # Validate file type
+            if (
+                not audio_file.name.lower().endswith(".mp3")
+                and audio_file.content_type != "audio/mpeg"
+            ):
+                return JsonResponse(
+                    {"success": False, "error": "Only MP3 files are allowed!"}
+                )
+
+            # Get course ID from lesson (direct course-level organization)
+            lesson = get_object_or_404(Lesson, id=lesson_id)
+            course_id = lesson.course.id
+
+            # Create upload path (DIRECTLY under course folder: courses/7/)
+            upload_dir = os.path.join("courses", str(course_id))  # No audio subfolder
+            full_upload_dir = os.path.join(settings.MEDIA_ROOT, upload_dir)
+            os.makedirs(full_upload_dir, exist_ok=True)
+
+            # Use ORIGINAL filename (no activity ID prefix)
+            filename = audio_file.name
+            # Add unique suffix only if file exists (prevent overwrites)
+            file_path = os.path.join(upload_dir, filename)
+            counter = 1
+            while default_storage.exists(file_path):
+                base, ext = os.path.splitext(filename)
+                filename = f"{base}_{counter}{ext}"
+                file_path = os.path.join(upload_dir, filename)
+                counter += 1
+
+            # Save file with clean filename (no activity_70_ prefix)
+            file_path = default_storage.save(file_path, audio_file)
+
+            # Return clean URL (e.g., /media/courses/7/37_-_audio_mDZJnds.mp3)
+            audio_url = os.path.join(settings.MEDIA_URL, file_path).replace("\\", "/")
+            return JsonResponse(
+                {"success": True, "audio_url": audio_url, "file_name": filename}
+            )
+
+        except Exception as e:
+            logger.error(f"Audio upload error: {str(e)}")
+            return JsonResponse({"success": False, "error": f"Upload failed: {str(e)}"})
+
+    return JsonResponse(
+        {"success": False, "error": "No file uploaded or invalid request!"}
     )
 
 
@@ -571,84 +664,132 @@ def edit_item(request, activity_id, item_id):
     activity = get_object_or_404(Activity, id=activity_id)
     course = activity.lesson.course
     lesson = activity.lesson
-    item = get_object_or_404(Item, id=item_id, activity=activity) if item_id else None
+
+    # 1. Fetch the existing item (if editing) - keep this as a separate variable (no shadowing later)
+    existing_item = (
+        get_object_or_404(Item, id=item_id, activity=activity) if item_id else None
+    )
+
     if request.method == "POST":
-        form = ItemForm(request.POST, request.FILES, instance=item)
+        # 2. Bind form to existing item (if editing) and POST data/FILES
+        form = ItemForm(request.POST, request.FILES, instance=existing_item)
+
         if form.is_valid():
-            # Store old file information before saving
-            old_image_path = item.image.path if item and item.image else None
-            old_audio_path = item.audio.path if item and item.audio else None
-            # Create media directory if needed
+            # 3. Get stale old file paths FROM THE EXISTING ITEM (not the form's new item)
+            old_image_path = None
+            old_audio_path = None
+            if existing_item:
+                old_image_path = (
+                    existing_item.image.path if existing_item.image else None
+                )
+                old_audio_path = (
+                    existing_item.audio.path if existing_item.audio else None
+                )
+
+            # 4. Create media directory if needed (unchanged)
             media_path = os.path.join("courses", str(course.id), str(activity.id))
             full_media_path = os.path.join(settings.MEDIA_ROOT, media_path)
             os.makedirs(full_media_path, exist_ok=True)
-            item = form.save(commit=False)
-            item.activity = activity
-            # Set number_answers based on item_type
-            if item.item_type in ["mc", "card"]:
-                item.number_answers = 1
+
+            # 5. Save form to new item instance (NO VARIABLE SHADOWING - use a new variable name)
+            # This is the updated item with the form's data (including the new answer value)
+            updated_item = form.save(commit=False)
+
+            # 6. Explicitly set activity (preserve existing logic)
+            updated_item.activity = activity
+
+            # 7. Set number_answers based on item_type (unchanged, but applied to updated_item)
+            if updated_item.item_type in ["mc", "card"]:
+                updated_item.number_answers = 1
             # For 'blank' items, number_answers is set by the form (based on blanks)
-            # Handle file uploads
+
+            # --------------------------
+            # CRITICAL: Explicitly log the answer value from the form's updated item
+            # Ensures we can confirm the answer is present before file handling/saving
+            # --------------------------
+            logger.info(
+                f"Preparing to save - Item Type: {updated_item.item_type}, "
+                f"Updated Answer: '{updated_item.answer}', "
+                f"Item ID: {updated_item.id if updated_item.id else 'New Item'}"
+            )
+
+            # 8. Handle file uploads (use old paths from existing_item, new data from updated_item)
             if "image" in request.FILES:
                 image_file = request.FILES["image"]
-                # Delete old image if exists
+                # Delete old image if exists (from existing_item)
                 if old_image_path and os.path.exists(old_image_path):
                     try:
                         os.remove(old_image_path)
                         logger.info(f"Deleted old image: {old_image_path}")
                     except Exception as e:
                         logger.error(f"Error deleting old image file: {str(e)}")
-                # Save new image with original filename
+                # Save new image with original filename (to updated_item)
                 filename = os.path.basename(image_file.name)
-                item.image.save(os.path.join(media_path, filename), image_file)
+                updated_item.image.save(os.path.join(media_path, filename), image_file)
+
             if "audio" in request.FILES:
                 audio_file = request.FILES["audio"]
-                # Delete old audio if exists
+                # Delete old audio if exists (from existing_item)
                 if old_audio_path and os.path.exists(old_audio_path):
                     try:
                         os.remove(old_audio_path)
                         logger.info(f"Deleted old audio: {old_audio_path}")
                     except Exception as e:
                         logger.error(f"Error deleting old audio file: {str(e)}")
-                # Save new audio with original filename
+                # Save new audio with original filename (to updated_item)
                 filename = os.path.basename(audio_file.name)
-                item.audio.save(os.path.join(media_path, filename), audio_file)
-            item.save()
-            # Reorder items
+                updated_item.audio.save(os.path.join(media_path, filename), audio_file)
+
+            # 9. CRITICAL: Save the updated item (persists the form's answer value to the database)
+            # This is the key step that was at risk of failure due to variable shadowing
+            updated_item.save()
+
+            # 10. Reorder items (unchanged, but use updated_item's activity)
             all_items = Item.objects.filter(activity=activity).order_by("order", "id")
             for index, itm in enumerate(all_items, start=1):
                 itm.order = index
                 itm.save()
+
+            # 11. Success message (use updated_item's title)
             messages.success(
                 request,
-                f"Item '{item.title}' {'updated' if item_id else 'created'} successfully.",
+                f"Item '{updated_item.title}' {'updated' if existing_item else 'created'} successfully.",
             )
+
+            # 12. Redirect (unchanged)
             return redirect(
                 "teacher:manage_items",
                 activity_id=activity.id,
             )
         else:
+            # 13. Log form errors for debugging (critical for tracking answer field issues)
+            logger.error(f"Form is invalid - Errors: {form.errors}")
             error = "Please correct the errors below"
     else:
+        # 14. Initialize form for GET request (unchanged, but use existing_item)
         initial = (
             {
                 "order": Item.objects.filter(activity=activity).count() + 1,
                 "number_answers": 1,
             }
-            if not item
+            if not existing_item
             else {
                 "number_answers": (
-                    1 if item.item_type in ["mc", "card"] else item.number_answers
+                    1
+                    if existing_item.item_type in ["mc", "card"]
+                    else existing_item.number_answers
                 )
             }
         )
-        form = ItemForm(instance=item, initial=initial)
+        form = ItemForm(instance=existing_item, initial=initial)
         error = None
+
+    # 15. Render template (pass existing_item as 'item' for template use)
     return render(
         request,
         "teacher/edit_item.html",
         {
-            "item": item or {},
+            "item": existing_item or {},
             "lesson": lesson,
             "activity": activity,
             "error": error,
@@ -812,7 +953,7 @@ def import_items(request, activity_id):
                             if pd.notna(row["answer"])
                             else ""
                         )
-
+                        hint = str(row["hint"]).strip() if pd.notna(row["hint"]) else ""
                         # --- Special Handling for Flashcards (card type) ---
                         # --- Special Handling for Flashcards (card type) ---
                         if item_type == "card":
@@ -858,6 +999,7 @@ def import_items(request, activity_id):
                             "title": title,
                             "item_type": item_type,
                             "audio_play": audio_play,
+                            "hint": hint,
                             "item_category": (
                                 str(row["item_category"])
                                 if pd.notna(row["item_category"])
@@ -978,6 +1120,7 @@ def export_items(request, activity_id):
                 "item_category": item.item_category or "",
                 "question": item.question or "",
                 "answer": item.answer or "",
+                "hint": item.hint or "",
                 "answer1": item.answer1 or "",
                 "answer2": item.answer2 or "",
                 "answer3": item.answer3 or "",

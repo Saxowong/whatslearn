@@ -17,35 +17,31 @@ from .models import (
     StudentItem,
 )
 
+
 class ActivityForm(forms.ModelForm):
     class Meta:
         model = Activity
         fields = [
-            'title',
-            'lesson',
-            'activity_type',
-            'order',
-            'html_content',
-            'video_embed_code',
-            'script',
-            'audio_file',
-            'pdf_file',
+            "title",
+            "lesson",
+            "activity_type",
+            "order",
+            "html_content",
+            "video_embed_code",
+            "audio_file",
+            "pdf_file",
         ]
         widgets = {
-            'title': forms.TextInput(attrs={'class': 'form-control'}),
-            'lesson': forms.Select(attrs={'class': 'form-select'}),
-            'activity_type': forms.Select(attrs={'class': 'form-select'}),
-            'order': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
-            'html_content': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
-            'video_embed_code': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
-            'script': forms.Textarea(attrs={
-                'rows': 5,
-                'cols': 40,
-                'class': 'form-control',
-                'placeholder': '[{"order": "1", "time": "00:00", "script": "what is your name"}, {"order": "2", "time": "00:05", "script": "my name is John"}]'
-            }),
-            'audio_file': forms.FileInput(attrs={'class': 'form-control'}),
-            'pdf_file': forms.FileInput(attrs={'class': 'form-control'}),
+            "title": forms.TextInput(attrs={"class": "form-control"}),
+            "lesson": forms.Select(attrs={"class": "form-select"}),
+            "activity_type": forms.Select(attrs={"class": "form-select"}),
+            "order": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "html_content": forms.Textarea(attrs={"rows": 4, "class": "form-control"}),
+            "video_embed_code": forms.Textarea(
+                attrs={"rows": 4, "class": "form-control"}
+            ),
+            "audio_file": forms.FileInput(attrs={"class": "form-control"}),
+            "pdf_file": forms.FileInput(attrs={"class": "form-control"}),
         }
 
     def clean(self):
@@ -55,7 +51,6 @@ class ActivityForm(forms.ModelForm):
         video_embed_code = cleaned_data.get("video_embed_code")
         html_content = cleaned_data.get("html_content")
         audio_file = cleaned_data.get("audio_file")
-        script = cleaned_data.get("script")
         title = cleaned_data.get("title")
         lesson = cleaned_data.get("lesson")
         order = cleaned_data.get("order")
@@ -73,47 +68,33 @@ class ActivityForm(forms.ModelForm):
             if not pdf_file and not self.instance.pdf_file:
                 self.add_error("pdf_file", "A PDF file is required for PDF activities.")
         elif pdf_file:
-            self.add_error("pdf_file", "PDF file should only be uploaded for PDF activities.")
+            self.add_error(
+                "pdf_file", "PDF file should only be uploaded for PDF activities."
+            )
 
         # Validation for video_embed_code
         if activity_type == "video":
             if not video_embed_code:
-                self.add_error("video_embed_code", "Video embed code is required for Video activities.")
+                self.add_error(
+                    "video_embed_code",
+                    "Video embed code is required for Video activities.",
+                )
             # Optional: Recommend audio_file for video activities
             if not audio_file and not self.instance.audio_file:
-                self.add_error("audio_file", "An audio file is recommended for Video activities with transcripts.")
+                self.add_error(
+                    "audio_file",
+                    "An audio file is recommended for Video activities with transcripts.",
+                )
 
         # Validation for html_content
         if activity_type == "html" and not html_content:
-            self.add_error("html_content", "HTML content is required for Content activities.")
-
-        # Validation for script (JSON field)
-        if script:
-            try:
-                # Ensure script is a valid JSON list
-                if isinstance(script, str):
-                    script = json.loads(script)  # Convert string to JSON if entered via Textarea
-                if not isinstance(script, list):
-                    raise ValidationError("Script must be a JSON array.")
-                # Check for unique orders
-                orders = [item['order'] for item in script if 'order' in item]
-                if len(orders) != len(set(orders)):
-                    raise ValidationError("Order values must be unique within the script array.")
-                for item in script:
-                    if not isinstance(item, dict) or 'order' not in item or 'time' not in item or 'script' not in item:
-                        raise ValidationError("Each script item must be an object with 'order', 'time', and 'script' keys.")
-                    if not re.match(r'^\d+$', str(item['order'])):
-                        raise ValidationError("Order must be a string of digits (e.g., '1', '2').")
-                    if not re.match(r'^\d{2}:\d{2}$', str(item['time'])):
-                        raise ValidationError("Time must be in MM:SS format (e.g., '00:00', '12:34').")
-                    if not isinstance(item['script'], str):
-                        raise ValidationError("Script content must be a string.")
-            except json.JSONDecodeError:
-                self.add_error("script", "Invalid JSON format. Please enter a valid JSON array.")
-            except ValidationError as e:
-                self.add_error("script", e.message)
+            self.add_error(
+                "html_content", "HTML content is required for Content activities."
+            )
 
         return cleaned_data
+
+
 class LessonInline(admin.TabularInline):
     model = Lesson
     extra = 1
@@ -327,8 +308,11 @@ class ActivityAdmin(admin.ModelAdmin):
 
     def pdf_file_link(self, obj):
         if obj.activity_type == "pdf" and obj.pdf_file:
-            return format_html('<a href="{}" target="_blank">View PDF</a>', obj.pdf_file.url)
+            return format_html(
+                '<a href="{}" target="_blank">View PDF</a>', obj.pdf_file.url
+            )
         return "-"
+
     pdf_file_link.short_description = "PDF File"
     pdf_file_link.allow_tags = True
 
@@ -377,6 +361,7 @@ class ActivityAdmin(admin.ModelAdmin):
     def item_count(self, obj):
         url = reverse("admin:course_item_changelist") + f"?activity__id__exact={obj.id}"
         return format_html('<a href="{}">Items ({})</a>', url, obj.items.count())
+
     item_count.short_description = "Items"
     item_count.allow_tags = True
 
@@ -403,9 +388,19 @@ class ActivityAdmin(admin.ModelAdmin):
                 if item.order != index:
                     item.order = index
                     item.save()
+
+
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ("title", "activity", "question", "answer", "number_answers", "order")
+    list_display = (
+        "title",
+        "activity",
+        "question",
+        "hint",
+        "answer",
+        "number_answers",
+        "order",
+    )
     search_fields = (
         "title",
         "question",

@@ -2,7 +2,8 @@ from django import forms
 from course.models import Course, Lesson, Activity, Item
 from django.core.validators import FileExtensionValidator
 
-import re # For regex operations
+import re  # For regex operations
+
 
 class CourseForm(forms.ModelForm):
     class Meta:
@@ -55,50 +56,71 @@ class ActivityForm(forms.ModelForm):
             ),
             "order": forms.NumberInput(attrs={"class": "form-control", "min": -1}),
         }
-        
+
 
 class ItemForm(forms.ModelForm):
     class Meta:
         model = Item
-        fields = ['title', 'item_type', 'item_category', 'question', 'number_answers', 'answer','answer1', 'answer2', 'answer3', 'answer4', 'image', 'audio', 'audio_play', 'order']
+        fields = [
+            "title",
+            "item_type",
+            "item_category",
+            "question",
+            "hint",
+            "number_answers",
+            "answer",
+            "answer1",
+            "answer2",
+            "answer3",
+            "answer4",
+            "image",
+            "audio",
+            "audio_play",
+            "order",
+        ]
         widgets = {
-            'question': forms.Textarea(attrs={'rows': 4}),
+            "question": forms.Textarea(attrs={"rows": 4}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Set required=False for fields that are optional
-        self.fields['number_answers'].required = False
-        self.fields['answer'].required = False
-        self.fields['answer1'].required = False
-        self.fields['answer2'].required = False
-        self.fields['answer3'].required = False
-        self.fields['answer4'].required = False
-        self.fields['image'].required = False
-        self.fields['audio'].required = False
-        self.fields['audio_play'].required = False
-        self.fields['order'].required = False
+        self.fields["number_answers"].required = False
+        self.fields["hint"].required = False
+        self.fields["answer"].required = False
+        self.fields["answer1"].required = False
+        self.fields["answer2"].required = False
+        self.fields["answer3"].required = False
+        self.fields["answer4"].required = False
+        self.fields["image"].required = False
+        self.fields["audio"].required = False
+        self.fields["audio_play"].required = False
+        self.fields["order"].required = False
 
     def clean(self):
         cleaned_data = super().clean()
-        item_type = cleaned_data.get('item_type')
-        question = cleaned_data.get('question')
-        if item_type == 'blank':
+        item_type = cleaned_data.get("item_type")
+        question = cleaned_data.get("question")
+        if item_type == "blank":
             blank_count = len(re.findall(r"___", question)) if question else 0
             if blank_count == 0:
-                self.add_error('question', "Fill in the Blank questions must contain at least one '___' placeholder.")
+                self.add_error(
+                    "question",
+                    "Fill in the Blank questions must contain at least one '___' placeholder.",
+                )
             for i in range(1, min(blank_count + 1, 5)):
-                if not cleaned_data.get(f'answer{i}'):
-                    self.add_error(f'answer{i}', 'This field is required.')
-        elif item_type == 'mc':
-            for field in ['answer', 'answer1', 'answer2', 'answer3', 'answer4']:
+                if not cleaned_data.get(f"answer{i}"):
+                    self.add_error(f"answer{i}", "This field is required.")
+        elif item_type == "mc":
+            for field in ["answer", "answer1", "answer2", "answer3", "answer4"]:
                 if not cleaned_data.get(field):
-                    self.add_error(field, 'This field is required.')
+                    self.add_error(field, "This field is required.")
         return cleaned_data
+
 
 class ItemImportForm(forms.Form):
     zip_file = forms.FileField(
         label="ZIP File",
         validators=[FileExtensionValidator(allowed_extensions=["zip"])],
-        help_text="Upload a ZIP file containing one CSV file (with column titles: title, question, answer, image_filename, audio_filename) and optional image (JPG/PNG) and audio (MP3) files.",
+        help_text="Upload a ZIP file containing one CSV file (with column titles: title, question, hint, answer, image_filename, audio_filename) and optional image (JPG/PNG) and audio (MP3) files.",
     )

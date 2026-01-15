@@ -70,7 +70,8 @@
                          data-item-answer1="{{ item.answer1|default:'' }}"
                          data-item-answer2="{{ item.answer2|default:'' }}"
                          data-item-answer3="{{ item.answer3|default:'' }}"
-                         data-item-answer4="{{ item.answer4|default:'' }}">
+                         data-item-answer4="{{ item.answer4|default:'' }}"
+                         data-item-hint="{{ item.hint|default:'' }}">
 
                         <div class="question-content mb-2 position-relative">
                             <center><h3 class="feedback-result d-none mb-3"></h3></center>
@@ -102,6 +103,8 @@
                                 {% endif %}
                                 <div class="blank-feedback-sentence fs-4 lh-lg mt-3"></div>
                                 <p class="correct-answer-text fs-5 text-primary mb-2"></p>
+                                <!-- ADD: Hint Element (below answer text) -->
+                                <p class="hint-text fs-6 text-muted mb-0"></p>
                             </div>
 
                             <div class="text-end mt-3 d-none skip-revision-container">
@@ -183,6 +186,13 @@
     .selected-answer { border-width: 2px !important; }
     .skip-revision-container { z-index: 100; }
     .skip-revision:hover { background-color: rgba(13, 110, 253, 0.1); }
+    /* HINT STYLES: Smaller font + medium grey */
+    .hint-text {
+        font-size: 1.1em !important; /* Smaller than answer (fs-5 = 1.25rem) */
+        color: #909090 !important; /* Medium grey (adjust to #666/#888 if needed) */
+        margin-top: 0.5rem !important; /* Space between answer and hint */
+        line-height: 1.5;
+    }
 </style>
 
 <script>
@@ -225,7 +235,7 @@ $(document).ready(function() {
         })();
     }
 
-    // Initialize Lists (Simplified - No JS Progress Updates)
+    // Initialize Lists (UPDATED: Add hint parsing)
     function initializeLists() {
         allItems = [];
         workingList = [];
@@ -234,7 +244,7 @@ $(document).ready(function() {
         isRevisionMode = false;
         revisedCount = 0;
 
-        // Parse items from DOM
+        // Parse items from DOM (ADD hint to item object)
         allItems = $('.question-card').map(function() {
             const $card = $(this);
             const numberAnswers = parseInt($card.data('item-number-answers')) || 1;
@@ -270,7 +280,8 @@ $(document).ready(function() {
                 audio_play: $card.data('item-audioplay') || 'start',
                 element: this,
                 isFillInTheBlank: $card.data('item-number-answers') > 1,
-                lastAnswerWasCorrect: false
+                lastAnswerWasCorrect: false,
+                hint: $card.data('item-hint') || '' // ADD: Store hint
             };
 
             if (item.is_master || item.successes >= MASTERY_THRESHOLD) {
@@ -344,7 +355,7 @@ $(document).ready(function() {
         }
     }
 
-    // Reset Question State (Unchanged)
+    // Reset Question State (UPDATED: Clear hint text)
     function resetQuestionState() {
         if (!currentItem) return;
         const $card = $(currentItem.element);
@@ -357,6 +368,8 @@ $(document).ready(function() {
             .removeClass('btn-success disabled')
             .addClass('btn-outline-primary');
         $card.find('.question-text').html(currentItem.original_question);
+        // ADD: Clear hint text on reset
+        $card.find('.hint-text').text('');
     }
 
     // Reshuffle Options (Unchanged)
@@ -369,7 +382,7 @@ $(document).ready(function() {
         });
     }
 
-    // Show Feedback (Unchanged)
+    // Show Feedback (UPDATED: Display hint below answer)
     function showFeedback(isCorrect, callback) {
         const $card = $(currentItem.element);
         $card.find('.answer-buttons, .not-sure-link').addClass('d-none');
@@ -404,6 +417,13 @@ $(document).ready(function() {
         if (isCorrect) $card.find('.skip-revision-container').removeClass('d-none');
         $card.find('.question-audio-icon').addClass('d-none');
         $card.find('.feedback-audio-icon').removeClass('d-none');
+
+        // ADD: Display hint below answer (only if hint exists)
+        if (currentItem.hint) {
+            $card.find('.hint-text').text(currentItem.hint).removeClass('d-none');
+        } else {
+            $card.find('.hint-text').addClass('d-none'); // Hide if no hint
+        }
 
         const audio = isCorrect ? $('#audio-correct')[0] : $('#audio-wrong')[0];
         audio.currentTime = 0;

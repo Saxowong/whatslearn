@@ -284,6 +284,7 @@ def revision_view(request, course_id):
             "item__title",
             "item__item_type",
             "item__question",
+            "item__hint",
             "item__answer",
             "item__answer1",
             "item__answer2",
@@ -321,6 +322,7 @@ def revision_view(request, course_id):
                 "item__title",
                 "item__item_type",
                 "item__question",
+                "item__hint",
                 "item__answer",
                 "item__answer1",
                 "item__answer2",
@@ -409,6 +411,7 @@ def revision_view(request, course_id):
             "item_id": item["item__id"],
             "item_type": item["item__item_type"],
             "title": item["item__title"],
+            "hint": item["item__hint"],
             "question": item["item__question"],
             "answer": item["item__answer"],
             "answer1": item["item__answer1"],
@@ -596,29 +599,26 @@ def course_view(request, course_id):
                     Prefetch(
                         "activities",
                         queryset=Activity.objects.annotate(
-                            total_items=Count("items"),
-                            mastered_items=Coalesce(
-                                Subquery(
-                                    StudentItem.objects.filter(
-                                        student=student_profile,
-                                        item__activity=OuterRef("pk"),
-                                        successes__gte=3,
-                                    )
-                                    .values("item__activity")
-                                    .annotate(count=Count("pk"))
-                                    .values("count")[:1],
-                                    output_field=IntegerField(),
-                                ),
-                                0,
-                            ),
+                            # -------------------------- MODIFICATION 1: Remove On-The-Fly Progress Calculations (Keep Nothing Related to total_items/mastered_items) --------------------------
+                            # DELETED: total_items=Count("items")
+                            # DELETED: mastered_items=Coalesce(...)
+                            # -------------------------- MODIFICATION 2: Retrieve Stored StudentActivity.progress (Replace On-The-Fly student_progress) --------------------------
                             student_progress=Coalesce(
-                                ExpressionWrapper(
-                                    (F("mastered_items") / F("total_items")) * 100,
+                                Subquery(
+                                    StudentActivity.objects.filter(
+                                        activity=OuterRef(
+                                            "pk"
+                                        ),  # Link to current Activity
+                                        student=student_profile,  # Link to current student
+                                    ).values("progress")[
+                                        :1
+                                    ],  # Fetch stored progress value from StudentActivity
                                     output_field=FloatField(),
                                 ),
-                                0.0,
+                                0.0,  # Default to 0% if no StudentActivity record exists
                                 output_field=FloatField(),
                             ),
+                            # -------------------------- UNCHANGED: student_completed (Already Fetches Stored StudentActivity Value) --------------------------
                             student_completed=Coalesce(
                                 Subquery(
                                     StudentActivity.objects.filter(
@@ -634,6 +634,7 @@ def course_view(request, course_id):
                 ).order_by("order"),
             )
         ).annotate(
+            # -------------------------- UNCHANGED: All Course-Level Annotations --------------------------
             revision_items_count=Subquery(
                 StudentItem.objects.filter(
                     student=student_profile,
@@ -659,7 +660,7 @@ def course_view(request, course_id):
         ),
         id=course_id,
     )
-    # Calculate category progress: count of mastered items per item_category
+    # -------------------------- UNCHANGED: Category Progress (Exact Original Logic) --------------------------
     category_progress = (
         StudentItem.objects.filter(
             student=student_profile,
@@ -670,13 +671,13 @@ def course_view(request, course_id):
         .annotate(mastered_count=Count("id"))
         .order_by("item__item_category")
     )
-    # Assign continuous numbering to activities across lessons
+    # -------------------------- UNCHANGED: Continuous Activity Numbering --------------------------
     activity_counter = 1
     for lesson in course.lessons.all():
         for activity in lesson.activities.all():
             activity.global_index = activity_counter
             activity_counter += 1
-    # Update StudentCourse's updated_at
+    # -------------------------- UNCHANGED: Update StudentCourse Timestamp --------------------------
     try:
         enrollment = StudentCourse.objects.get(student=student_profile, course=course)
         enrollment.save()  # auto_now=True updates timestamp

@@ -34,87 +34,119 @@
                 <div class="alert alert-danger mb-3">{{ error }}</div>
                 {% endif %}
                 <input type="hidden" name="number_answers" id="id_number_answers" value="{{ form.number_answers.value|default_if_none:'1' }}">
-                <div class="row">
-                    <div class="col-md-5 mb-3">
-                        <label for="id_title" class="form-label">Item Title</label>
+                
+                <!-- Row 1: Title, Item Type, Item Category -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <label for="id_title" class="form-label d-block mb-2">Item Title</label>
                         {{ form.title }}
                         {% if form.title.errors %}
-                        <div class="invalid-feedback d-block">{{ form.title.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.title.errors }}</div>
                         {% endif %}
                     </div>
-                    <div class="col-md-3 mb-3">
-                        <label for="id_item_type" class="form-label">Item Type</label>
+                    <div class="col-md-4">
+                        <label for="id_item_type" class="form-label d-block mb-2">Item Type</label>
                         {{ form.item_type }}
                         {% if form.item_type.errors %}
-                        <div class="invalid-feedback d-block">{{ form.item_type.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.item_type.errors }}</div>
                         {% endif %}
                     </div>
-                    <div class="col-md-4 mb-3">
-                        <label for="id_item_category" class="form-label">Item Category</label>
+                    <div class="col-md-4">
+                        <label for="id_item_category" class="form-label d-block mb-2">Item Category</label>
                         {{ form.item_category }}
                         {% if form.item_category.errors %}
-                        <div class="invalid-feedback d-block">{{ form.item_category.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.item_category.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="id_question" class="form-label">Question</label>
+                
+                <!-- Row 2: Question & Hint -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label for="id_question" class="form-label d-block mb-2">Question</label>
                         {{ form.question }}
-                        <small id="blank-count-feedback" class="form-text text-muted"></small>
+                        <small id="blank-count-feedback" class="form-text text-muted mt-1">Use 3+ underscores (___) for blanks</small>
                         {% if form.question.errors %}
-                        <div class="invalid-feedback d-block">{{ form.question.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.question.errors }}</div>
                         {% endif %}
                     </div>
-                    <div class="col-md-6 mb-3" id="dynamic-field">
+                    <div class="col-md-6">
+                        <label for="id_hint" class="form-label d-block mb-2">Hint</label>
+                        {{ form.hint }}
+                        <small class="form-text text-muted mt-1">Optional: Provide a hint to help users solve the item</small>
+                        {% if form.hint.errors %}
+                        <div class="invalid-feedback d-block mt-1">{{ form.hint.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Row 3: Dynamic Field (Number of Blanks + Correct Answer IN THE SAME ROW for Blank / Answer for Other Types) -->
+                <div class="row mb-4">
+                    <div class="col-md-12" id="dynamic-field">
+                        <!-- SINGLE RENDERING OF {{ form.answer }} (for ALL types - dynamically adjust label/visibility) -->
                         <div id="answer-field" class="hidden">
-                            <label for="id_answer" class="form-label">Correct Answer</label>
-                            {{ form.answer }}
+                            <label for="id_answer" class="form-label d-block mb-2" id="answer-label">Correct Answer</label>
+                            {{ form.answer }}  <!-- ONLY ONE RENDERING (critical fix) -->
                             {% if form.answer.errors %}
-                            <div class="invalid-feedback d-block">{{ form.answer.errors }}</div>
+                            <div class="invalid-feedback d-block mt-1">{{ form.answer.errors }}</div>
                             {% endif %}
                         </div>
-                        <div id="number-answers-field" class="hidden">
-                            <label for="id_number_answers_display" class="form-label">Number of Blanks</label>
-                            <input type="number" id="id_number_answers_display" class="form-control" readonly value="{{ form.number_answers.value|default_if_none:'1' }}">
+                        
+                        <!-- Blank Type: Number of Blanks (col-md-6) + Answer Field (col-md-6) - NO DUPLICATE form.answer -->
+                        <div id="blank-fields-row" class="hidden row g-4">
+                            <div class="col-md-6" id="number-answers-field">
+                                <label for="id_number_answers_display" class="form-label d-block mb-2">Number of Blanks</label>
+                                <input type="number" id="id_number_answers_display" class="form-control" readonly value="{{ form.number_answers.value|default_if_none:'1' }}">
+                            </div>
+                            <div class="col-md-6" id="blank-answer-wrapper">
+                                <!-- Reuse the single answer field (via JS to update label) - NO {{ form.answer }} here -->
+                                <label for="id_answer" class="form-label d-block mb-2">Final Correct Answer</label>
+                                <div id="blank-answer-field-proxy">{% comment %} Proxy to show the single answer field {% endcomment %}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3" id="answer1-field">
-                        <label for="id_answer1" class="form-label">Answer 1</label>
+                
+                <!-- Row 4: Answer 1 & Answer 2 -->
+                <div class="row mb-4">
+                    <div class="col-md-6" id="answer1-field">
+                        <label for="id_answer1" class="form-label d-block mb-2">Answer 1</label>
                         {{ form.answer1 }}
                         {% if form.answer1.errors %}
-                        <div class="invalid-feedback d-block">{{ form.answer1.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.answer1.errors }}</div>
                         {% endif %}
                     </div>
-                    <div class="col-md-6 mb-3" id="answer2-field">
-                        <label for="id_answer2" class="form-label">Answer 2</label>
+                    <div class="col-md-6" id="answer2-field">
+                        <label for="id_answer2" class="form-label d-block mb-2">Answer 2</label>
                         {{ form.answer2 }}
                         {% if form.answer2.errors %}
-                        <div class="invalid-feedback d-block">{{ form.answer2.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.answer2.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3" id="answer3-field">
-                        <label for="id_answer3" class="form-label">Answer 3</label>
+                
+                <!-- Row 5: Answer 3 & Answer 4 -->
+                <div class="row mb-4">
+                    <div class="col-md-6" id="answer3-field">
+                        <label for="id_answer3" class="form-label d-block mb-2">Answer 3</label>
                         {{ form.answer3 }}
                         {% if form.answer3.errors %}
-                        <div class="invalid-feedback d-block">{{ form.answer3.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.answer3.errors }}</div>
                         {% endif %}
                     </div>
-                    <div class="col-md-6 mb-3" id="answer4-field">
-                        <label for="id_answer4" class="form-label">Answer 4</label>
+                    <div class="col-md-6" id="answer4-field">
+                        <label for="id_answer4" class="form-label d-block mb-2">Answer 4</label>
                         {{ form.answer4 }}
                         {% if form.answer4.errors %}
-                        <div class="invalid-feedback d-block">{{ form.answer4.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.answer4.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Image</label>
+                
+                <!-- Row 6: Image & Audio -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label d-block mb-2">Image</label>
                         <div id="image-dropzone" class="dropzone" tabindex="0"></div>
                         {% if item.image %}
                             <div class="mt-2">
@@ -122,36 +154,46 @@
                             </div>
                         {% endif %}
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="id_audio" class="form-label">Audio</label>
-                        {{ form.audio }}
+                    <div class="col-md-6">
+                        <label for="id_audio" class="form-label d-block mb-2">Audio</label>
+                        <!-- Simplified audio field: hide Change label + clear checkbox -->
+                        <div class="audio-field-wrapper">
+                            {{ form.audio }}
+                        </div>
+                        <!-- Custom current audio link (clean version) -->
                         {% if item.audio %}
-                        <div class="mt-2">
-                            <small>Current audio: <a href="{{ item.audio.url }}" target="_blank">Listen</a></small>
+                        <div class="current-audio-wrapper mt-2">
+                            <small>
+                                <a href="{{ item.audio.url }}" target="_blank">Listen to current audio</a>
+                            </small>
                         </div>
                         {% endif %}
                         {% if form.audio.errors %}
-                        <div class="invalid-feedback d-block">{{ form.audio.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.audio.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3" id="audio-play-field">
-                        <label for="id_audio_play" class="form-label">Audio Playback</label>
+                
+                <!-- Row 7: Audio Playback & Order -->
+                <div class="row mb-4">
+                    <div class="col-md-6" id="audio-play-field">
+                        <label for="id_audio_play" class="form-label d-block mb-2">Audio Playback</label>
                         {{ form.audio_play }}
                         {% if form.audio_play.errors %}
-                        <div class="invalid-feedback d-block">{{ form.audio_play.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.audio_play.errors }}</div>
                         {% endif %}
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="id_order" class="form-label">Order</label>
+                    <div class="col-md-6">
+                        <label for="id_order" class="form-label d-block mb-2">Order</label>
                         {{ form.order }}
                         {% if form.order.errors %}
-                        <div class="invalid-feedback d-block">{{ form.order.errors }}</div>
+                        <div class="invalid-feedback d-block mt-1">{{ form.order.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
-                <div class="d-flex justify-content-end gap-2">
+                
+                <!-- Action Buttons -->
+                <div class="d-flex justify-content-end gap-2 mt-5">
                     <a href="{% url 'teacher:manage_items' activity.id %}" class="btn btn-secondary">Cancel</a>
                     <button id="submit-btn" type="submit" class="btn btn-success">Save</button>
                 </div>
@@ -164,16 +206,108 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 <link rel="stylesheet" href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css" />
 <style>
-    .form-label { font-weight: 500; }
-    .card { max-width: 800px; margin: 0 auto; }
-    .form-control, .form-select { width: 100%; }
-    .dropzone { min-height: 150px; border: 2px dashed #ccc; padding: 20px; background: #fafafa; }
+    /* Core label styling - above input fields */
+    .form-label { 
+        font-weight: 600; 
+        color: #333;
+    }
+    
+    /* Form controls full width with proper spacing */
+    .form-control, .form-select { 
+        width: 100%; 
+        padding: 0.6rem 0.8rem;
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+        font-size: 1rem;
+    }
+    
+    /* Focus state for inputs */
+    .form-control:focus, .form-select:focus {
+        border-color: #80bdff;
+        outline: 0;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    /* Dropzone styling */
+    .dropzone { 
+        min-height: 150px; 
+        border: 2px dashed #ccc; 
+        padding: 20px; 
+        background: #fafafa; 
+        border-radius: 0.375rem;
+    }
+    
+    /* Hidden class */
     .hidden { display: none; }
-    #id_number_answers_display { background-color: #f8f9fa; cursor: not-allowed; }
+    
+    /* Readonly number input styling */
+    #id_number_answers_display { 
+        background-color: #f8f9fa; 
+        cursor: not-allowed; 
+    }
+    
+    /* Error feedback styling */
+    .invalid-feedback {
+        color: #dc3545;
+        font-size: 0.875rem;
+    }
+    
+    /* Form text (helper text) styling */
+    .form-text {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    
+    /* Better spacing between form rows */
+    .row > div {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Audio field fixes - ONLY what's needed */
+    .audio-field-wrapper {
+        margin-bottom: 1rem !important;
+    }
+    /* Hide Change label, clear checkbox, and extra spaces */
+    .audio-field-wrapper {
+        /* Hide Change: text */
+        font-size: 0;
+    }
+    /* Show only Currently: text */
+    .audio-field-wrapper::before {
+        content: attr(data-current);
+        font-size: 1rem;
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+    /* Show file input normally */
+    .audio-field-wrapper input[type="file"] {
+        font-size: 1rem;
+        display: block;
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+        background-color: #fff;
+    }
+    /* Hide clear checkbox/label */
+    .audio-field-wrapper input[type="checkbox"],
+    .audio-field-wrapper label[for*="clear_"] {
+        display: none !important;
+    }
+
+    /* Current audio link styling */
+    .current-audio-wrapper {
+        display: block;
+        width: 100%;
+        padding-top: 0.5rem;
+    }
 </style>
 {% endblock %}
 {% block extra_js %}
 <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
+
+
 <script>
 Dropzone.autoDiscover = false;
 document.addEventListener('DOMContentLoaded', function() {
@@ -217,6 +351,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 formElements.forEach(function(el) {
                     formData.append(el.name, el.value);
                 });
+                // Include hint field in form data for dropzone submission
+                var hintInput = document.getElementById('id_hint');
+                if (hintInput) {
+                    formData.append('hint', hintInput.value);
+                }
                 var audioInput = document.getElementById('id_audio');
                 if (audioInput.files.length > 0) {
                     formData.append('audio', audioInput.files[0]);
@@ -242,14 +381,28 @@ document.addEventListener('DOMContentLoaded', function() {
             dropzone.addFile(file);
         }
     });
+
+    // Simple JS to extract Currently: text and hide Change:
+    const audioWrapper = document.querySelector('.audio-field-wrapper');
+    if (audioWrapper) {
+        // Extract the Currently: text from the wrapper
+        const text = audioWrapper.textContent.trim();
+        const currentText = text.match(/Currently: .+/);
+        if (currentText) {
+            // Set it as a data attribute for CSS to display
+            audioWrapper.setAttribute('data-current', currentText[0]);
+        }
+    }
+
     // Dynamic field visibility and number_answers calculation for blank items
     var itemTypeSelect = document.getElementById('id_item_type');
     var questionInput = document.getElementById('id_question');
     var numberAnswersInput = document.getElementById('id_number_answers');
     var numberAnswersDisplay = document.getElementById('id_number_answers_display');
-    var numberAnswersField = document.getElementById('number-answers-field');
+    var blankFieldsRow = document.getElementById('blank-fields-row'); // NEW: Reference same-row container
     var blankCountFeedback = document.getElementById('blank-count-feedback');
     var answerField = document.getElementById('answer-field');
+    var blankAnswerField = document.getElementById('blank-answer-field'); // Reference blank answer field
     var dynamicField = document.getElementById('dynamic-field');
     var answer1Field = document.getElementById('answer1-field');
     var answer2Field = document.getElementById('answer2-field');
@@ -258,11 +411,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var audioField = document.getElementById('id_audio');
     var audioPlayField = document.getElementById('audio-play-field');
     var hasAudio = {% if item.audio %}true{% else %}false{% endif %};
+    
     function updateFields() {
         var itemType = itemTypeSelect.value;
+        var answerLabel = document.getElementById('answer-label'); // Get the answer label
         // Reset visibility and required attributes
         answerField.classList.add('hidden');
-        numberAnswersField.classList.add('hidden');
+        blankFieldsRow.classList.add('hidden'); 
         answer1Field.classList.add('hidden');
         answer2Field.classList.add('hidden');
         answer3Field.classList.add('hidden');
@@ -273,12 +428,16 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('id_answer3').required = false;
         document.getElementById('id_answer4').required = false;
         blankCountFeedback.textContent = '';
+        
         if (itemType === 'card' || itemType === 'mc') {
-            numberAnswersInput.value = 1; // Set number_answers to 1 for card and mc
+            // Update label for card/mc type
+            answerLabel.textContent = 'Correct Answer';
+            numberAnswersInput.value = 1; 
             numberAnswersDisplay.value = 1;
             answerField.classList.remove('hidden');
             dynamicField.classList.remove('hidden');
             document.getElementById('id_answer').required = true;
+            
             if (itemType === 'mc') {
                 answer1Field.classList.remove('hidden');
                 answer2Field.classList.remove('hidden');
@@ -290,43 +449,53 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('id_answer4').required = true;
             }
         } else if (itemType === 'blank') {
+            // Update label for blank type (preserve UI experience)
+            answerLabel.textContent = 'Final Correct Answer';
             dynamicField.classList.remove('hidden');
             answer1Field.classList.remove('hidden');
             answer2Field.classList.remove('hidden');
             answer3Field.classList.remove('hidden');
             answer4Field.classList.remove('hidden');
+            
             // Normalize underscores for blank items
             var questionText = questionInput.value || '';
             var normalizedText = questionText.replace(/_{3,}/g, '____');
             if (questionText !== normalizedText) {
                 questionInput.value = normalizedText;
             }
+            
             // Count sequences of 4 underscores (after normalization)
             var underscoreCount = (normalizedText.match(/____/g) || []).length;
-            var numAnswers = Math.max(1, underscoreCount); // Ensure at least 1
+            var numAnswers = Math.max(1, underscoreCount); 
             numberAnswersInput.value = numAnswers;
             numberAnswersDisplay.value = numAnswers;
-            numberAnswersField.classList.remove('hidden');
+            blankFieldsRow.classList.remove('hidden');
+            answerField.classList.remove('hidden'); // Show the single answer field for blank type
+            document.getElementById('id_answer').required = true; 
+            
             blankCountFeedback.textContent = underscoreCount > 0
                 ? `Detected ${underscoreCount} blank(s) (3 or more underscores normalized to ____). Number of answers set to ${numAnswers}.`
                 : 'No blanks detected. Use 3 or more underscores (e.g., ___) for each blank. Number of answers set to 1.';
+            
             // Set required attributes based on number of blanks
             document.getElementById('id_answer1').required = numAnswers >= 1;
             document.getElementById('id_answer2').required = numAnswers >= 2;
             document.getElementById('id_answer3').required = numAnswers >= 3;
             document.getElementById('id_answer4').required = numAnswers >= 4;
         } else {
-            numberAnswersInput.value = 1; // Default to 1 for unknown types
+            numberAnswersInput.value = 1; 
             numberAnswersDisplay.value = 1;
             dynamicField.classList.add('hidden');
         }
         updateAudioPlayRequirement();
     }
+    
     function updateAudioPlayRequirement() {
         var audioPlayInput = document.getElementById('id_audio_play');
         var isRequired = hasAudio || audioField.files.length > 0;
         audioPlayInput.required = isRequired;
     }
+    
     // Initialize fields based on current item_type and question
     updateFields();
     itemTypeSelect.addEventListener('change', updateFields);

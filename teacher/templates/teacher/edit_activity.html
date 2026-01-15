@@ -4,148 +4,1332 @@
 <div class="container pt-3">
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
-            <li class="breadcrumb-item">
-                <a href="{% url 'teacher:manage_courses' %}">Manage Courses</a>
-            </li>
-            <li class="breadcrumb-item">
-                <a href="{% url 'teacher:manage_activities' lesson.id %}">Lessons</a>
-            </li>
-            <li class="breadcrumb-item active" aria-current="page">
-                Edit Activity
-            </li>
+            <li class="breadcrumb-item"><a href="{% url 'teacher:manage_courses' %}">Manage Courses</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'teacher:manage_activities' lesson.id %}">Lessons</a></li>
+            <li class="breadcrumb-item active">Edit Activity</li>
         </ol>
     </nav>
 </div>
+
 <div class="container mt-5">
     <div class="card">
         <div class="card-header bg-success text-white">
-            <h4 class="mb-0">{% if activity.id %}Edit Activity{% else %}New Activity{% endif %}</h4>
+            <h4 class="mb-0">{% if activity.id %}Edit Activity{% else %}Create New Activity{% endif %}</h4>
         </div>
         <div class="card-body">
-            <form id="activityForm" method="POST" action="{% url 'teacher:edit_activity' lesson.id activity.id|default:0 %}" enctype="multipart/form-data">
+            <form id="activityForm" method="POST" enctype="multipart/form-data">
                 {% csrf_token %}
+                
                 {% if error %}
-                <div class="alert alert-danger mb-3">{{ error }}</div>
+                <div class="alert alert-danger mb-4">
+                    <i class="bi bi-exclamation-circle"></i> {{ error }}
+                </div>
                 {% endif %}
+                
                 {% if form.errors %}
-                <div class="alert alert-danger mb-3">
+                <div class="alert alert-danger mb-4">
+                    <h6 class="mb-2">Form Errors:</h6>
                     {% for field in form %}
                         {% for error in field.errors %}
-                            <p>{{ field.label }}: {{ error }}</p>
+                            <p class="mb-1"><small>{{ field.label }}: {{ error }}</small></p>
                         {% endfor %}
                     {% endfor %}
                     {% for error in form.non_field_errors %}
-                        <p>{{ error }}</p>
+                        <p class="mb-1"><small>{{ error }}</small></p>
                     {% endfor %}
                 </div>
                 {% endif %}
-                <div class="mb-3">
-                    <label for="id_activity_type" class="form-label">Activity Type</label>
-                    <select id="id_activity_type" name="activity_type" class="form-select" required {% if activity.activity_type %}disabled{% endif %}>
+
+                <!-- Activity Type Selection (Fixed validation issue) -->
+                <div class="mb-4">
+                    <label for="id_activity_type" class="form-label fw-semibold">Activity Type</label>
+                    <select id="id_activity_type" name="activity_type" class="form-select" 
+                            required {% if activity.activity_type %}disabled formnovalidate{% endif %}>
                         {% for type_id, type_name in activity_types %}
-                        <option value="{{ type_id }}" {% if activity.activity_type == type_id %}selected{% endif %}>
-                            {{ type_name }}
-                        </option>
+                        <option value="{{ type_id }}" {% if activity.activity_type == type_id %}selected{% endif %}>{{ type_name }}</option>
                         {% endfor %}
                     </select>
                     {% if activity.activity_type %}
-                    <select id="id_activity_type_hidden" name="activity_type" class="form-select" hidden>
-                        {% for type_id, type_name in activity_types %}
-                        <option value="{{ type_id }}" {% if activity.activity_type == type_id %}selected{% endif %}>
-                            {{ type_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <input type="hidden" name="activity_type" value="{{ activity.activity_type }}">
                     {% endif %}
                 </div>
-                <div class="mb-3">
-                    <label for="id_title" class="form-label">Activity Title</label>
-                    <input type="text" id="id_title" name="title" class="form-control" value="{{ activity.title|default:'' }}" required>
+
+                <!-- Activity Title -->
+                <div class="mb-4">
+                    <label for="id_title" class="form-label fw-semibold">Activity Title</label>
+                    <input type="text" id="id_title" name="title" class="form-control" 
+                           value="{{ activity.title|default:'' }}" required>
                 </div>
-                <div class="mb-3" id="html-fields" style="display: {% if activity.activity_type == 'html' or activity.activity_type == 'exercise' or not activity.activity_type %}block{% else %}none{% endif %}">
-                    <label for="id_html_content" class="form-label">Description</label>
-                    <textarea id="id_html_content" name="html_content" class="form-control ckeditor">{{ activity.html_content|default:'' }}</textarea>
-                    <small class="text-muted">Enter the description for the HTML or exercise activity (supports rich text formatting).</small>
+
+                <!-- HTML/Exercise Content (Conditional Display) -->
+                <div class="mb-4" id="html-fields" style="display: {% if activity.activity_type == 'html' or activity.activity_type == 'exercise' or not activity.activity_type %}block{% else %}none{% endif %}">
+                    <label for="id_html_content" class="form-label fw-semibold">Content</label>
+                    <textarea id="id_html_content" name="html_content" class="form-control ckeditor" rows="8">{{ activity.html_content|default:'' }}</textarea>
+                    <small class="text-muted mt-1 d-block">Supports rich text formatting (HTML allowed)</small>
                 </div>
-                <div class="mb-3" id="video-fields" style="display: {% if activity.activity_type == 'video' %}block{% else %}none{% endif %}">
-                    <label for="id_video_embed_code" class="form-label">Video Embed Code</label>
-                    <textarea id="id_video_embed_code" name="video_embed_code" class="form-control" rows="4">{{ activity.video_embed_code|default:'' }}</textarea>
-                    <small class="text-muted">Paste YouTube/Vimeo embed code here.</small>
+
+                <!-- Video Embed (Conditional Display) -->
+                <div class="mb-4" id="video-fields" style="display: {% if activity.activity_type == 'video' %}block{% else %}none{% endif %}">
+                    <label for="video_embed_code" class="form-label fw-semibold">Video Embed Code</label>
+                    <textarea id="video_embed_code" name="video_embed_code" class="form-control" rows="4">{{ activity.video_embed_code|default:'' }}</textarea>
+                    <small class="text-muted mt-1 d-block">Paste YouTube/Vimeo embed code (iframe)</small>
                 </div>
-                <div class="mb-3" id="pdf-fields" style="display: {% if activity.activity_type == 'pdf' %}block{% else %}none{% endif %}">
-                    <label for="id_pdf_file" class="form-label">PDF File</label>
+
+                <!-- PDF File (Conditional Display) -->
+                <div class="mb-4" id="pdf-fields" style="display: {% if activity.activity_type == 'pdf' %}block{% else %}none{% endif %}">
+                    <label for="id_pdf_file" class="form-label fw-semibold">PDF File</label>
                     <input type="file" id="id_pdf_file" name="pdf_file" class="form-control" accept="application/pdf">
                     {% if activity.pdf_file %}
-                    <small class="text-muted"><a href="{{ activity.pdf_file.url }}" target="_blank">{{ activity.pdf_file.name }}</a></small>
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="bi bi-file-pdf-fill text-danger"></i> Current PDF: 
+                            <a href="{{ activity.pdf_file.url }}" target="_blank">{{ activity.pdf_file.name }}</a>
+                        </small>
+                    </div>
                     {% endif %}
-                    <small class="text-muted">Upload a PDF file (replaces existing file if any).</small>
                 </div>
+
+                <!-- Reading Activity (Unified Audio + Script Editor) -->
+                <div class="mb-4" id="reading-fields" style="display: {% if activity.activity_type == 'reading' %}block{% else %}none{% endif %}">
+                    <!-- Audio Upload Section (Separate but above script editor) -->
+                    <div class="card mb-4 border">
+                        <div class="card-header bg-light py-2">
+                            <h6 class="mb-0 fw-semibold">Audio File (MP3)</h6>
+                        </div>
+                        <div class="card-body py-3">
+                            <div class="input-group">
+                                <input type="file" id="audio_file_input" class="form-control" accept="audio/mpeg">
+                                <button type="button" id="upload_audio_btn" class="btn btn-primary">
+                                    <i class="bi bi-upload"></i> Upload
+                                </button>
+                            </div>
+                            
+                            <!-- Upload Status -->
+                            <div id="audio_upload_status" class="mt-2"></div>
+                            
+                            <!-- Existing Audio Display -->
+                            {% if activity and activity.audio_file %}
+                            <div class="mt-2 alert alert-info p-2 mb-0">
+                                <small class="text-muted">
+                                    <i class="bi bi-music-note-beamed"></i> Current audio: 
+                                    <a href="{{ activity.audio_file.url }}" target="_blank">{{ activity.audio_file.name }}</a>
+                                </small>
+                                <input type="hidden" id="existing_audio_url" value="{{ activity.audio_file.url }}">
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Hidden Audio URL Input (For Form Submission) -->
+                            <input type="hidden" id="audio_file_url" name="audio_file_url" 
+                                   value="{% if activity and activity.audio_file %}{{ activity.audio_file.url }}{% endif %}">
+                        </div>
+                    </div>
+
+                    <!-- YouTube Link (Optional) -->
+                    <div class="mb-4">
+                        <label for="id_reading_youtube_link" class="form-label fw-semibold">YouTube Link (Optional)</label>
+                        <input type="url" id="id_reading_youtube_link" name="reading_youtube_link" class="form-control" 
+                               value="{{ activity.video_embed_code|default:'' }}" placeholder="https://youtu.be/...">
+                        <small class="text-muted mt-1 d-block">Alternative to audio file (will generate embed code)</small>
+                    </div>
+
+                    <!-- Unified Reading Script + Audio Player Card -->
+                    <div class="card mb-4 border">
+                        <div class="card-header bg-light py-2">
+                            <h6 class="mb-0 fw-semibold">Reading Script (Timestamps & Sentences)</h6>
+                        </div>
+                        <div class="card-body py-3">
+                            <!-- Audio Player (INTEGRATED HERE) -->
+                            <div class="pb-3 border-bottom">
+                                <h6 class="fw-semibold small mb-3">Audio Player (Sync Timestamps)</h6>
+                                
+                                <!-- Player Controls with Editable Time TextField -->
+                                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                                    <!-- PLAY/STOP TOGGLE BUTTON -->
+                                    <button type="button" id="play_stop_btn" class="btn btn-success btn-sm">
+                                        <i class="bi bi-play-fill"></i> Play
+                                    </button>
+                                    <button type="button" id="pause_btn" class="btn btn-warning btn-sm">
+                                        <i class="bi bi-pause-fill"></i> Pause
+                                    </button>
+                                    <!-- Editable Time TextField -->
+                                    <input type="text" id="current_time_input" class="form-control form-control-sm w-25" 
+                                           value="00:00:00" placeholder="HH:MM:SS">
+                                    <!-- Set End Time Button -->
+                                    <button type="button" id="set_time_btn" class="btn btn-info btn-sm">
+                                        <i class="bi bi-flag-fill"></i> Set End Time
+                                    </button>
+                                    <!-- IMPORT SCRIPT BUTTON (NEW) -->
+                                    <button type="button" id="import_script_btn" class="btn btn-secondary btn-sm">
+                                        <i class="bi bi-file-earmark-text"></i> Import Script
+                                    </button>
+                                </div>
+                                
+                                <!-- Clickable Progress Bar -->
+                                <div class="progress position-relative" style="height: 8px; cursor: pointer;" id="audio_progress_container">
+                                    <div id="audio_progress" class="progress-bar bg-primary" role="progressbar" 
+                                         style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                
+                                <!-- Time Display -->
+                                <div class="d-flex justify-content-between mt-2 text-sm text-muted">
+                                    <span id="current_time">00:00:00</span>
+                                    <span id="total_duration">00:00:00</span>
+                                </div>
+                                
+                                <!-- Hidden Audio Element -->
+                                <audio id="audio_player" preload="metadata">
+                                    {% if activity and activity.audio_file %}
+                                    <source src="{{ activity.audio_file.url }}" type="audio/mpeg">
+                                    {% endif %}
+                                </audio>
+                            </div>
+
+                            <!-- Script Timestamps Editor -->
+                            <div class="border rounded p-3 mb-3" id="script-container">
+                                <div class="row mb-2 fw-semibold small text-muted">
+                                    <div class="col-2">Start (sec)</div>
+                                    <div class="col-2">End (sec)</div>
+                                    <div class="col-5">Sentence</div>
+                                    <div class="col-3">Actions</div>
+                                </div>
+                                <!-- Script Rows Will Be Added Here Dynamically -->
+                            </div>
+                            
+                            <button type="button" id="add-script-row" class="btn btn-sm btn-primary">
+                                <i class="bi bi-plus-circle"></i> Add Sentence
+                            </button>
+                            <small class="text-muted mt-1 d-block">
+                                Click "Set End Time" when a sentence completes to set its end time. Overrides existing rows first, adds new rows when needed.
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Hidden SRT Content -->
+                    <textarea id="srt_content" name="srt_content" style="display: none;">{{ raw_srt_content }}</textarea>
+                </div>
+
+                <!-- Activity Order -->
                 {% if activity.id %}
-                <div class="mb-3">
-                    <label for="id_order" class="form-label">Order</label>
-                    <input type="number" id="id_order" name="order" class="form-control" value="{{ activity.order }}" min="-1">
+                <div class="mb-4">
+                    <label for="id_order" class="form-label fw-semibold">Display Order</label>
+                    <input type="number" id="id_order" name="order" class="form-control" 
+                           value="{{ activity.order }}" min="1">
+                    <small class="text-muted mt-1 d-block">Position in lesson (1 = first)</small>
                 </div>
                 {% else %}
                 <input type="hidden" name="order" value="10000">
                 {% endif %}
-                <div class="d-flex justify-content-end gap-2">
-                    <a href="{% url 'teacher:manage_activities' lesson.id %}" class="btn btn-secondary">Cancel</a>
-                    <button type="submit" class="btn btn-success">Save</button>
+
+                <!-- Form Actions (Fixed submit button with formnovalidate) -->
+                <div class="d-flex justify-content-end gap-3 mt-4">
+                    <a href="{% url 'teacher:manage_activities' lesson.id %}" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Cancel
+                    </a>
+                    <!-- New Save Button -->
+                    <button type="button" id="save_only_btn" class="btn btn-outline-success">
+                        <i class="bi bi-save"></i> Save
+                    </button>
+                    <button type="submit" id="save_btn" class="btn btn-success" formnovalidate>
+                        <i class="bi bi-save"></i> {% if activity.id %}Update Activity{% else %}Create Activity{% endif %}
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<!-- IMPORT SCRIPT MODAL (NEW) -->
+<div class="modal fade" id="importScriptModal" tabindex="-1" aria-labelledby="importScriptModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title" id="importScriptModalLabel">
+                    <i class="bi bi-file-earmark-text"></i> Import Script
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="import_script_text" class="form-label fw-semibold">Paste Your Script (Each line = one sentence)</label>
+                    <textarea id="import_script_text" class="form-control" rows="10" placeholder="Line 1 (sentence 1)
+Line 2 (sentence 2)
+Line 3 (sentence 3)
+..."></textarea>
+                    <small class="text-muted mt-1 d-block">
+                        Each line break (Enter/Return) will create a new sentence row. All existing timestamps will be cleared to 0.00 seconds.
+                    </small>
+                </div>
+                <div class="alert alert-warning mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> This will replace all existing script rows. Your current script data will be lost.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="confirm_import_btn" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Confirm Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
+
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 <style>
-    .form-label {
-        font-weight: 500;
+    /* Base Styles */
+    .form-label.fw-semibold {
+        font-weight: 600;
     }
-    .card {
-        max-width: 800px;
-        margin: 0 auto;
+    
+    /* Script Editor Styles */
+    .script-row {
+        align-items: center;
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #eee;
+        transition: background-color 0.2s ease;
+        cursor: pointer;
     }
+    
+    .script-row:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    
+    .script-row.active {
+        background-color: #e7f5ff; /* Light blue for active editing row */
+        border-radius: 4px;
+        padding: 0.5rem 0rem;
+        margin-bottom: 0.5rem;
+        border: 2px solid #0d6efd !important;
+    }
+    
+    .script-row.selected {
+        background-color: #d1e7dd; /* Success green for manually selected row */
+        border-radius: 4px;
+        padding: 0.5rem 0rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .script-row .form-control {
+        height: calc(1.5em + 0.5rem + 2px);
+        font-size: 0.9rem;
+    }
+    
+    .remove-row, .play-row, .add-row {
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+    
+    .remove-row:hover, .play-row:hover, .add-row:hover {
+        opacity: 1;
+    }
+    
+    .remove-row:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    
+    /* Action buttons container */
+    .action-buttons {
+        display: flex;
+        gap: 4px;
+        justify-content: flex-start;
+    }
+    
+    /* Audio Player Styles */
+    .progress-bar {
+        transition: width 0.1s linear;
+    }
+    
+    #audio_progress_container {
+        user-select: none;
+    }
+    
+    /* Integrated Audio Player Separator */
+    .border-bottom {
+        border-color: #eee !important;
+    }
+    
+    /* Alert Styles */
+    .alert-info p-2 {
+        padding: 0.5rem !important;
+    }
+    
+    /* Utility Classes */
+    .text-danger {
+        color: #dc3545 !important;
+    }
+    
+    .text-success {
+        color: #198754 !important;
+    }
+    
+    .text-muted {
+        color: #6c757d !important;
+    }
+    
+    /* CKEditor Adjustments */
     .ck-editor__editable {
-        min-height: 80px;
-    }
-    textarea.ckeditor {
         min-height: 200px;
+    }
+    
+    /* Time Input Field */
+    #current_time_input {
+        text-align: center;
+        font-family: monospace;
+    }
+    
+    /* Play/Stop button styles */
+    #play_stop_btn.playing {
+        background-color: #dc3545 !important;
+        border-color: #dc3545 !important;
+    }
+    
+    /* Import Script Modal Styles */
+    #import_script_text {
+        font-family: monospace;
+        resize: vertical;
     }
 </style>
 {% endblock %}
+
 {% block extra_js %}
 <script src="https://cdn.ckeditor.com/ckeditor5/38.0.1/classic/ckeditor.js"></script>
 <script>
 $(document).ready(function() {
-    // Initialize CKEditor
+    // --- FIX: Store CKEditor instance reference ---
+    let ckeditorInstance = null;
+    
+    // Initialize CKEditor if present
     if ($('.ckeditor').length) {
-        ClassicEditor
-            .create(document.querySelector('.ckeditor'), {
-                toolbar: {
-                    items: [
-                        'heading', '|',
-                        'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|',
-                        'outdent', 'indent', '|',
-                        'blockQuote', 'insertTable', 'undo', 'redo'
-                    ]
-                }
-            })
-            .catch(error => {
-                console.error('CKEditor initialization error:', error);
-            });
+        ClassicEditor.create(document.querySelector('.ckeditor'), {
+            toolbar: [
+                'heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList',
+                '|', 'outdent', 'indent', '|', 'blockQuote', 'insertTable', 'undo', 'redo'
+            ],
+            heading: {
+                options: [
+                    { model: 'paragraph', title: 'Paragraph', class: 'ck-heading_paragraph' },
+                    { model: 'heading1', view: 'h1', title: 'Heading 1', class: 'ck-heading_heading1' },
+                    { model: 'heading2', view: 'h2', title: 'Heading 2', class: 'ck-heading_heading2' },
+                    { model: 'heading3', view: 'h3', title: 'Heading 3', class: 'ck-heading_heading3' }
+                ]
+            }
+        }).then(editor => {
+            // Save reference to editor instance
+            ckeditorInstance = editor;
+        }).catch(error => {
+            console.error('CKEditor initialization error:', error);
+        });
     }
-    // Show/hide fields based on activity type
-    $('#id_activity_type').change(function() {
-        const type = $(this).val();
-        console.log('Activity type changed:', type);
-        $('#html-fields').toggle(type === 'html' || type === 'exercise');
+
+    // Toggle Fields Based on Activity Type
+    const toggleFields = () => {
+        const type = $('#id_activity_type').val();
+        $('#html-fields').toggle(type === 'html' || type === 'exercise' || !type);
         $('#video-fields').toggle(type === 'video');
         $('#pdf-fields').toggle(type === 'pdf');
+        $('#reading-fields').toggle(type === 'reading');
+    };
+    
+    $('#id_activity_type').on('change', toggleFields).trigger('change');
+
+    // --- AUDIO PLAYER & UPLOAD FUNCTIONALITY ---
+    // Player Elements
+    const audioPlayer = document.getElementById('audio_player');
+    const playStopBtn = $('#play_stop_btn');
+    const pauseBtn = $('#pause_btn');
+    const setTimeBtn = $('#set_time_btn');
+    const currentTimeInput = $('#current_time_input');
+    const audioProgressContainer = $('#audio_progress_container');
+    const audioProgress = $('#audio_progress');
+    const currentTimeDisplay = $('#current_time');
+    const totalDurationDisplay = $('#total_duration');
+    const audioUploadBtn = $('#upload_audio_btn');
+    const audioFileInput = $('#audio_file_input');
+    const audioUploadStatus = $('#audio_upload_status');
+    const audioFileUrlInput = $('#audio_file_url');
+    const existingAudioUrl = $('#existing_audio_url').val() || audioFileUrlInput.val() || '';
+
+    // Track playback state
+    let currentEditingRowIndex = 0;
+    let selectedRowIndex = -1;
+    let isPlaying = false;
+    let isRowBoundedPlayback = false;
+    let boundedPlaybackEndTime = 0;
+
+    // Format Time (seconds to HH:MM:SS)
+    const formatTime = (seconds) => {
+        if (!seconds || isNaN(seconds)) return '00:00:00';
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    // Convert HH:MM:SS to seconds (with validation)
+    const timeToSeconds = (timeStr) => {
+        const timePattern = /^(\d{2}):(\d{2}):(\d{2})$/;
+        const match = timeStr.match(timePattern);
+        
+        if (!match) {
+            return audioPlayer.currentTime || 0;
+        }
+        
+        const hours = parseInt(match[1]);
+        const minutes = parseInt(match[2]);
+        const seconds = parseInt(match[3]);
+        const totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+        
+        const maxSeconds = audioPlayer.duration || totalSeconds;
+        return Math.min(totalSeconds, maxSeconds);
+    };
+
+    // --- STRICT 2 DECIMAL PLACE HANDLING ---
+    const roundToTwoDecimals = (value) => {
+        const rounded = Math.round(parseFloat(value) * 100) / 100;
+        return parseFloat(rounded.toFixed(2));
+    };
+
+    // Convert seconds (2 decimals) to SRT time format (00:00:00,000)
+    const secondsToSrtTime = (seconds) => {
+        const cleanSeconds = roundToTwoDecimals(seconds);
+        const wholeSeconds = Math.floor(cleanSeconds);
+        const hundredths = Math.round((cleanSeconds - wholeSeconds) * 100);
+        const ms = (hundredths * 10).toString().padStart(3, '0');
+        const hours = Math.floor(wholeSeconds / 3600).toString().padStart(2, '0');
+        const minutes = Math.floor((wholeSeconds % 3600) / 60).toString().padStart(2, '0');
+        const secs = Math.floor(wholeSeconds % 60).toString().padStart(2, '0');
+        return `${hours}:${minutes}:${secs},${ms}`;
+    };
+
+    // Highlight the current editing row
+    const highlightCurrentEditingRow = () => {
+        $('.script-row').removeClass('active');
+        
+        if (selectedRowIndex === -1) {
+            $('.script-row').removeClass('selected');
+        }
+        
+        const $currentRow = $('.script-row').eq(currentEditingRowIndex);
+        if ($currentRow.length) {
+            $currentRow.addClass('active');
+            
+            if (!$currentRow.isInViewport()) {
+                $currentRow[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    };
+
+    // Select a row (click/input focus handler)
+    const selectRow = (index) => {
+        $('.script-row').removeClass('active').removeClass('selected');
+        
+        selectedRowIndex = index;
+        currentEditingRowIndex = index;
+        
+        const $selectedRow = $('.script-row').eq(index);
+        if ($selectedRow.length) {
+            $selectedRow.addClass('selected');
+            
+            const startTime = parseFloat($selectedRow.find('.start-time-input').val()) || 0;
+            
+            if (!isNaN(startTime) && audioPlayer.duration) {
+                audioPlayer.currentTime = startTime;
+                updatePlayerUI();
+            }
+        }
+    };
+
+    // UPDATE PLAY/STOP BUTTON STATE
+    const updatePlayStopButton = () => {
+        if (isPlaying) {
+            playStopBtn.removeClass('btn-success').addClass('btn-danger playing');
+            playStopBtn.html('<i class="bi bi-stop-fill"></i> Stop');
+        } else {
+            playStopBtn.removeClass('btn-danger playing').addClass('btn-success');
+            playStopBtn.html('<i class="bi bi-play-fill"></i> Play');
+        }
+    };
+
+    // Update Player UI
+    const updatePlayerUI = () => {
+        const currentTime = audioPlayer.currentTime;
+        const duration = audioPlayer.duration;
+        
+        if (duration && !isNaN(duration)) {
+            const progressPercent = (currentTime / duration) * 100;
+            audioProgress.css('width', `${progressPercent}%`);
+            const formattedTime = formatTime(currentTime);
+            currentTimeDisplay.text(formattedTime);
+            
+            if (!currentTimeInput.is(':focus')) {
+                currentTimeInput.val(formattedTime);
+            }
+            
+            totalDurationDisplay.text(formatTime(duration));
+            
+            // Check for playback end (reset play button)
+            if (currentTime >= duration && isPlaying) {
+                isPlaying = false;
+                updatePlayStopButton();
+                audioPlayer.pause();
+            }
+            
+            if (isRowBoundedPlayback && currentTime >= boundedPlaybackEndTime) {
+                isPlaying = false;
+                updatePlayStopButton();
+                audioPlayer.pause();
+                isRowBoundedPlayback = false;
+                boundedPlaybackEndTime = 0;
+                return;
+            }
+            
+            if (!isRowBoundedPlayback && isPlaying) {
+                highlightCurrentEditingRow();
+            }
+        }
+    };
+
+    // Prepare next row for editing (proper index handling)
+    const prepareNextRow = () => {
+        const $rows = $('.script-row');
+        // Save current index before incrementing
+        const currentIndex = currentEditingRowIndex;
+        const nextRowIndex = currentIndex + 1;
+        
+        if (nextRowIndex < $rows.length) {
+            const $currentRow = $rows.eq(currentIndex);
+            const $nextRow = $rows.eq(nextRowIndex);
+            
+            // Get current row's end time
+            const currentEndTime = parseFloat($currentRow.find('.end-time-input').val()) || 0;
+            
+            // Update next row's start time with 2 decimals
+            $nextRow.find('.start-time-input').val(roundToTwoDecimals(currentEndTime).toFixed(2));
+            
+            // Move to next row
+            currentEditingRowIndex = nextRowIndex;
+            
+            // Highlight and focus
+            highlightCurrentEditingRow();
+            $nextRow.find('.sentence-input').focus();
+            
+            return nextRowIndex;
+        }
+        
+        // Return -1 if no next row exists
+        return -1;
+    };
+
+    // Create a new row ONLY when needed
+    const createNewRowIfNeeded = (startTime) => {
+        const newRowIndex = $('.script-row').length;
+        
+        // Create with exactly 2 decimals
+        addRow(
+            roundToTwoDecimals(startTime).toFixed(2), 
+            roundToTwoDecimals(startTime + 0.1).toFixed(2), 
+            '', 
+            newRowIndex
+        );
+        
+        // Update current editing index to the new row
+        currentEditingRowIndex = newRowIndex;
+        
+        highlightCurrentEditingRow();
+        
+        $('.script-row').eq(newRowIndex).find('.sentence-input').focus();
+        
+        return newRowIndex;
+    };
+
+    // TOGGLE PLAY/STOP
+    const togglePlayback = () => {
+        if (!audioPlayer.src) {
+            audioUploadStatus.html('<div class="text-danger"><i class="bi bi-exclamation-circle"></i> No audio file loaded!</div>');
+            return;
+        }
+
+        if (isPlaying) {
+            audioPlayer.pause();
+            isPlaying = false;
+            updatePlayStopButton();
+        } else {
+            isRowBoundedPlayback = false;
+            boundedPlaybackEndTime = 0;
+            
+            audioPlayer.play();
+            isPlaying = true;
+            updatePlayStopButton();
+            
+            if (selectedRowIndex !== -1) {
+                selectedRowIndex = -1;
+                $('.script-row').removeClass('selected');
+            }
+            
+            highlightCurrentEditingRow();
+        }
+    };
+
+    // Play audio with bounded time range
+    const playRowWithBounds = (index) => {
+        const $row = $('.script-row').eq(index);
+        if (!$row.length || !audioPlayer.src) return;
+        
+        const startTime = parseFloat($row.find('.start-time-input').val()) || 0;
+        const endTime = parseFloat($row.find('.end-time-input').val()) || (startTime + 2);
+        
+        isRowBoundedPlayback = true;
+        boundedPlaybackEndTime = endTime;
+        
+        audioPlayer.currentTime = startTime;
+        
+        currentEditingRowIndex = index;
+        
+        audioPlayer.play();
+        isPlaying = true;
+        updatePlayStopButton();
+        
+        selectRow(index);
+    };
+
+    // Initialize Existing Audio
+    if (existingAudioUrl) {
+        console.log('Loading existing audio:', existingAudioUrl);
+        audioPlayer.src = existingAudioUrl;
+        audioPlayer.load();
+        
+        audioPlayer.onloadedmetadata = function() {
+            totalDurationDisplay.text(formatTime(audioPlayer.duration));
+            highlightCurrentEditingRow();
+        };
+        
+        audioPlayer.onended = function() {
+            isPlaying = false;
+            updatePlayStopButton();
+        };
+    }
+
+    // Audio Upload (AJAX)
+    audioUploadBtn.click(function() {
+        const file = audioFileInput[0].files[0];
+        if (!file) {
+            audioUploadStatus.html('<div class="text-danger"><i class="bi bi-exclamation-circle"></i> Please select an MP3 file first!</div>');
+            return;
+        }
+
+        if (file.type !== 'audio/mpeg' && !file.name.toLowerCase().endsWith('.mp3')) {
+            audioUploadStatus.html('<div class="text-danger"><i class="bi bi-exclamation-circle"></i> Only MP3 files are allowed!</div>');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('audio_file', file);
+        formData.append('csrfmiddlewaretoken', $('input[name="csrfmiddlewaretoken"]').val());
+        formData.append('lesson_id', '{{ lesson.id }}');
+        formData.append('activity_id', '{{ activity.id|default:"0" }}');
+
+        audioUploadStatus.html('<div class="text-muted"><i class="bi bi-hourglass-split"></i> Uploading audio file...</div>');
+        audioUploadBtn.prop('disabled', true);
+
+        $.ajax({
+            url: "{% url 'teacher:upload_audio' %}",
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                audioUploadBtn.prop('disabled', false);
+                
+                if (response.success) {
+                    audioUploadStatus.html(`
+                        <div class="text-success">
+                            <i class="bi bi-check-circle"></i> Audio uploaded successfully!
+                        </div>
+                        <div class="mt-1">
+                            <small>
+                                <a href="${response.audio_url}" target="_blank">${file.name}</a>
+                            </small>
+                        </div>
+                    `);
+                    
+                    audioFileUrlInput.val(response.audio_url);
+                    audioPlayer.src = response.audio_url;
+                    audioPlayer.load();
+                    
+                    audioPlayer.onloadedmetadata = function() {
+                        totalDurationDisplay.text(formatTime(audioPlayer.duration));
+                        highlightCurrentEditingRow();
+                    };
+                    
+                    audioPlayer.onended = function() {
+                        isPlaying = false;
+                        updatePlayStopButton();
+                    };
+                } else {
+                    audioUploadStatus.html(`<div class="text-danger"><i class="bi bi-exclamation-circle"></i> ${response.error}</div>`);
+                }
+            },
+            error: function(xhr, status, error) {
+                audioUploadBtn.prop('disabled', false);
+                audioUploadStatus.html(`
+                    <div class="text-danger">
+                        <i class="bi bi-exclamation-circle"></i> Upload failed! ${error}
+                    </div>
+                `);
+                console.error('Audio upload error:', xhr.responseText);
+            }
+        });
     });
-    // Trigger change on page load
-    $('#id_activity_type').trigger('change');
+
+    // PLAY/STOP TOGGLE BUTTON CLICK HANDLER
+    playStopBtn.click(function() {
+        togglePlayback();
+    });
+
+    pauseBtn.click(function() {
+        audioPlayer.pause();
+        isPlaying = false;
+        updatePlayStopButton();
+    });
+
+    // Editable Time Input Field Handler
+    currentTimeInput.on('change blur', function() {
+        if (!audioPlayer.src) return;
+        
+        const inputTime = $(this).val();
+        const targetSeconds = timeToSeconds(inputTime);
+        
+        audioPlayer.currentTime = targetSeconds;
+        
+        updatePlayerUI();
+        highlightCurrentEditingRow();
+    });
+
+    // Clickable Progress Bar Handler
+    audioProgressContainer.click(function(e) {
+        if (!audioPlayer.src) return;
+        
+        const progressBar = $(this);
+        const clickX = e.pageX - progressBar.offset().left;
+        const progressBarWidth = progressBar.width();
+        const clickPercent = (clickX / progressBarWidth);
+        
+        const targetSeconds = clickPercent * audioPlayer.duration;
+        audioPlayer.currentTime = targetSeconds;
+        
+        updatePlayerUI();
+        highlightCurrentEditingRow();
+    });
+
+    // Set Time Button (proper row progression)
+    setTimeBtn.click(function() {
+        const currentTime = audioPlayer.currentTime;
+        const $rows = $('.script-row');
+        
+        // Debug: Log current state
+        console.log('Set Time clicked - Current row index:', currentEditingRowIndex);
+        console.log('Total rows:', $rows.length);
+        
+        // Case 1: No rows exist - create first row
+        if ($rows.length === 0) {
+            addRow(0, roundToTwoDecimals(currentTime).toFixed(2), '', 0);
+            currentEditingRowIndex = 0;
+            highlightCurrentEditingRow();
+            
+            audioUploadStatus.html(`
+                <div class="text-success">
+                    <i class="bi bi-check-circle"></i> Created first row with end time ${roundToTwoDecimals(currentTime).toFixed(2)}s
+                </div>
+            `);
+            
+            setTimeout(() => { audioUploadStatus.html(''); }, 2000);
+            return;
+        }
+        
+        // Case 2: Rows exist - update current row
+        const $currentRow = $rows.eq(currentEditingRowIndex);
+        
+        if (!$currentRow.length) {
+            audioUploadStatus.html(`
+                <div class="text-danger">
+                    <i class="bi bi-exclamation-circle"></i> Error: Current row not found!
+                </div>
+            `);
+            setTimeout(() => { audioUploadStatus.html(''); }, 2000);
+            return;
+        }
+        
+        // Step 1: Update CURRENT row's end time (with 2 decimals)
+        const currentEndTime = roundToTwoDecimals(currentTime).toFixed(2);
+        $currentRow.find('.end-time-input').val(currentEndTime);
+        
+        // Step 2: Try to move to next existing row
+        const nextRowIndex = prepareNextRow();
+        
+        // Step 3: If no next row, create new one (only if needed)
+        let newRowCreated = false;
+        if (nextRowIndex === -1) {
+            createNewRowIfNeeded(parseFloat(currentEndTime));
+            newRowCreated = true;
+        }
+        
+        // Step 4: Show feedback
+        const rowNum = newRowCreated ? currentEditingRowIndex - 1 : currentEditingRowIndex - 1;
+        const feedbackMsg = newRowCreated 
+            ? `<div class="text-success">
+                <i class="bi bi-check-circle"></i> Updated row ${rowNum} end time to ${currentEndTime}s (created new row)
+               </div>`
+            : `<div class="text-success">
+                <i class="bi bi-check-circle"></i> Updated row ${rowNum} end time to ${currentEndTime}s (moved to next row)
+               </div>`;
+        
+        audioUploadStatus.html(feedbackMsg);
+        
+        setTimeout(() => {
+            audioUploadStatus.html('');
+        }, 3000);
+        
+        updatePlayerUI();
+    });
+
+    // --- SRT PROCESSING WITH STRICT 2 DECIMAL HANDLING ---
+    const parseSrtToRows = (rawSrt) => {
+        const rows = [];
+        if (!rawSrt || typeof rawSrt !== 'string') return rows;
+
+        const normalizedSrt = rawSrt.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const blocks = normalizedSrt.trim().split(/\n{2,}/);
+
+        blocks.forEach((block, blockIdx) => {
+            const lines = block.trim().split('\n');
+            if (lines.length < 3 || !lines[1] || !lines[1].includes('-->')) return;
+
+            try {
+                const timeLine = lines[1].trim();
+                const [startSrt, endSrt] = timeLine.split('-->').map(t => t.trim());
+                
+                const srtTimeToSeconds = (srtTime) => {
+                    const [timePart, msPart] = srtTime.split(/[,.]/);
+                    const [h, m, s] = timePart.split(':');
+                    
+                    const totalSeconds = parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(s);
+                    const ms = parseInt(msPart || '000');
+                    const hundredths = Math.floor(ms / 10);
+                    
+                    return roundToTwoDecimals(totalSeconds + (hundredths / 100));
+                };
+
+                const start = srtTimeToSeconds(startSrt);
+                const end = srtTimeToSeconds(endSrt);
+                const sentence = lines.slice(2).join('\n').trim();
+
+                if (start >= 0 && end > start && sentence) {
+                    rows.push({ start, end, sentence });
+                }
+            } catch (e) {
+                console.error(`Error parsing block ${blockIdx}:`, e);
+            }
+        });
+
+        return rows.sort((a, b) => a.start - b.start);
+    };
+
+    // Add Single Row to UI
+    const addRow = (start = 0, end = 2, sentence = '', insertAtIndex = -1) => {
+        const $container = $('#script-container');
+        const escapedSentence = sentence.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        
+        let rowIndex;
+        if (insertAtIndex === -1 || insertAtIndex >= $container.find('.script-row').length) {
+            rowIndex = $container.find('.script-row').length;
+        } else {
+            rowIndex = insertAtIndex;
+        }
+        
+        const rowHtml = `
+            <div class="row align-items-center script-row" data-row-index="${rowIndex}">
+                <div class="col-2">
+                    <input type="number" step="0.01" min="0" class="form-control start-time-input" 
+                           value="${start}" required>
+                </div>
+                <div class="col-2">
+                    <input type="number" step="0.01" min="0" class="form-control end-time-input" 
+                           value="${end}" required>
+                </div>
+                <div class="col-5">
+                    <input type="text" class="form-control sentence-input" 
+                           value="${escapedSentence}" required>
+                </div>
+                <div class="col-3">
+                    <div class="action-buttons">
+                        <!-- Play Button -->
+                        <button type="button" class="btn btn-sm btn-success play-row">
+                            <i class="bi bi-play-fill"></i>
+                        </button>
+                        <!-- Add Row Button -->
+                        <button type="button" class="btn btn-sm btn-primary add-row">
+                            <i class="bi bi-plus"></i>
+                        </button>
+                        <!-- Remove Row Button -->
+                        <button type="button" class="btn btn-sm btn-danger remove-row">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        if (insertAtIndex === -1 || insertAtIndex >= $container.find('.script-row').length) {
+            $container.append(rowHtml);
+        } else {
+            const $rows = $container.find('.script-row');
+            if ($rows.length > 0 && $rows.eq(insertAtIndex).length) {
+                $rows.eq(insertAtIndex).before(rowHtml);
+            } else {
+                $container.append(rowHtml);
+            }
+        }
+        
+        reindexAllRows();
+        updateRemoveButtons();
+        
+        const $newRow = $container.find(`.script-row[data-row-index="${rowIndex}"]`);
+        
+        $newRow.click(function(e) {
+            if (!$(e.target).is('button')) {
+                const rowIdx = parseInt($(this).data('row-index'));
+                selectRow(rowIdx);
+            }
+        });
+        
+        $newRow.find('input').focus(function() {
+            const rowIdx = parseInt($(this).closest('.script-row').data('row-index'));
+            selectRow(rowIdx);
+        });
+        
+        $newRow.find('.play-row').click(function(e) {
+            e.stopPropagation();
+            const rowIdx = parseInt($(this).closest('.script-row').data('row-index'));
+            playRowWithBounds(rowIdx);
+        });
+        
+        // Add click handler for add-row button
+        $newRow.find('.add-row').click(function(e) {
+            e.stopPropagation();
+            const $currentRow = $(this).closest('.script-row');
+            const currentRowIndex = parseInt($currentRow.data('row-index'));
+            
+            // Get end time from current row for new row's start time
+            const currentEndTime = parseFloat($currentRow.find('.end-time-input').val()) || 0;
+            
+            // Add new row after current row
+            const newRowIndex = addRow(
+                roundToTwoDecimals(currentEndTime).toFixed(2),
+                roundToTwoDecimals(currentEndTime + 0.1).toFixed(2),
+                '',
+                currentRowIndex + 1 // Insert after current row
+            );
+            
+            // Update editing index to new row
+            currentEditingRowIndex = newRowIndex;
+            highlightCurrentEditingRow();
+            
+            // Focus on new row's sentence input
+            $('.script-row').eq(newRowIndex).find('.sentence-input').focus();
+        });
+        
+        return rowIndex;
+    };
+
+    const reindexAllRows = () => {
+        $('.script-row').each((idx, el) => {
+            $(el).data('row-index', idx).attr('data-row-index', idx);
+        });
+    };
+
+    const addEmptyRow = () => {
+        const $rows = $('.script-row');
+        let lastEndTime = 0;
+        
+        if ($rows.length > 0) {
+            lastEndTime = parseFloat($rows.last().find('.end-time-input').val()) || 0;
+        }
+        
+        addRow(
+            roundToTwoDecimals(lastEndTime).toFixed(2), 
+            roundToTwoDecimals(lastEndTime + 2).toFixed(2), 
+            ''
+        );
+    };
+
+    const updateRemoveButtons = () => {
+        const $rows = $('.script-row');
+        $rows.find('.remove-row').prop('disabled', $rows.length <= 1);
+    };
+
+    // Generate SRT with strictly 2 decimal-based timestamps
+    const generateCleanSrt = () => {
+        const $rows = $('.script-row');
+        const srtBlocks = [];
+
+        const sortedRows = Array.from($rows).sort((a, b) => {
+            const aStart = parseFloat($(a).find('.start-time-input').val()) || 0;
+            const bStart = parseFloat($(b).find('.start-time-input').val()) || 0;
+            return aStart - bStart;
+        });
+
+        sortedRows.forEach(($row, idx) => {
+            const $rowEl = $($row);
+            const start = parseFloat($rowEl.find('.start-time-input').val()) || 0;
+            const end = parseFloat($rowEl.find('.end-time-input').val()) || (start + 2);
+            const sentence = $rowEl.find('.sentence-input').val().trim();
+
+            if (!sentence || end <= start) return;
+
+            const srtBlock = `${idx + 1}\n${secondsToSrtTime(start)} --> ${secondsToSrtTime(end)}\n${sentence}`;
+            srtBlocks.push(srtBlock);
+        });
+
+        return srtBlocks.join('\n\n');
+    };
+
+    $(document).on('click', '.remove-row', function(e) {
+        e.stopPropagation();
+        const $row = $(this).closest('.script-row');
+        const rowIndex = parseInt($row.data('row-index'));
+        
+        if ($('.script-row').length <= 1) return;
+        
+        $row.remove();
+        reindexAllRows();
+        updateRemoveButtons();
+        
+        // Adjust current editing index if needed
+        if (rowIndex === currentEditingRowIndex) {
+            currentEditingRowIndex = Math.max(0, currentEditingRowIndex - 1);
+        } else if (rowIndex < currentEditingRowIndex) {
+            currentEditingRowIndex -= 1;
+        }
+        
+        if (rowIndex === selectedRowIndex) {
+            selectedRowIndex = -1;
+        }
+        
+        highlightCurrentEditingRow();
+    });
+
+    $('#add-script-row').click(function() {
+        addEmptyRow();
+        currentEditingRowIndex = $('.script-row').length - 1;
+        highlightCurrentEditingRow();
+    });
+
+    $.fn.isInViewport = function() {
+        const elementTop = $(this).offset().top;
+        const elementBottom = elementTop + $(this).outerHeight();
+        const viewportTop = $(window).scrollTop();
+        const viewportBottom = viewportTop + $(window).height();
+        return elementBottom > viewportTop && elementTop < viewportBottom;
+    };
+
+    // Auto-round to 2 decimals on input change
+    $(document).on('change', '.start-time-input, .end-time-input', function() {
+        const value = parseFloat($(this).val()) || 0;
+        $(this).val(roundToTwoDecimals(value).toFixed(2));
+        
+        if ($(this).hasClass('start-time-input')) {
+            const $row = $(this).closest('.script-row');
+            const rowIndex = parseInt($row.data('row-index'));
+            
+            if (rowIndex === selectedRowIndex) {
+                audioPlayer.currentTime = roundToTwoDecimals(value);
+                updatePlayerUI();
+            }
+            
+            const $nextRow = $('.script-row').eq(rowIndex + 1);
+            if ($nextRow.length) {
+                const thisEndTime = parseFloat($row.find('.end-time-input').val()) || (value + 2);
+                $nextRow.find('.start-time-input').val(roundToTwoDecimals(thisEndTime).toFixed(2));
+            }
+        }
+    });
+
+    // Save Only Button Functionality
+    $('#save_only_btn').click(function(e) {
+        e.preventDefault();
+        
+        // Show saving indicator
+        $(this).prop('disabled', true).html('<i class="bi bi-hourglass-split"></i> Saving...');
+        
+        // Force all time inputs to 2 decimals
+        $('.start-time-input, .end-time-input').each(function() {
+            const value = parseFloat($(this).val()) || 0;
+            $(this).val(roundToTwoDecimals(value).toFixed(2));
+        });
+        
+        // Save CKEditor content if exists
+        if (ckeditorInstance) {
+            ckeditorInstance.updateSourceElement();
+        }
+        
+        // Generate clean SRT
+        const cleanSrt = generateCleanSrt();
+        $('#srt_content').val(cleanSrt);
+        
+        // Submit form via AJAX to save without redirect
+        const formData = new FormData($('#activityForm')[0]);
+        
+        $.ajax({
+            url: window.location.href,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                // Reload the page to show saved changes
+                window.location.reload();
+            },
+            error: function(xhr, status, error) {
+                // Re-enable button and show error
+                $('#save_only_btn').prop('disabled', false).html('<i class="bi bi-save"></i> Save');
+                
+                // Show error message
+                alert('Save failed: ' + (xhr.responseText || error));
+                console.error('Save error:', xhr.responseText);
+            }
+        });
+    });
+
+    // --- FIXED FORM SUBMISSION HANDLER (No CKEditor iterator error) ---
+    $('#activityForm').submit(function(e) {
+        // Prevent default to process data first
+        e.preventDefault();
+
+        try {
+            // Show loading state
+            $('#save_btn').prop('disabled', true).html('<i class="bi bi-hourglass-split"></i> Saving...');
+
+            // --- FIX: Safe CKEditor content update ---
+            if (ckeditorInstance) {
+                ckeditorInstance.updateSourceElement();
+            }
+
+            // Process script rows (force 2 decimals)
+            $('.start-time-input, .end-time-input').each(function() {
+                const value = parseFloat($(this).val()) || 0;
+                $(this).val((Math.round(value * 100) / 100).toFixed(2));
+            });
+
+            // Generate SRT
+            const cleanSrt = generateCleanSrt();
+            $('#srt_content').val(cleanSrt);
+
+            // Submit form directly
+            const formElement = this;
+            setTimeout(() => {
+                formElement.submit();
+            }, 100);
+
+        } catch (error) {
+            console.error('Submission error:', error);
+            alert('Failed to save activity: ' + (error.message || 'Unknown error'));
+            $('#save_btn').prop('disabled', false).html('<i class="bi bi-save"></i> {% if activity.id %}Update Activity{% else %}Create Activity{% endif %}');
+        }
+    });
+
+    // --- NEW: IMPORT SCRIPT FUNCTIONALITY ---
+    // Open Import Script Modal
+    $('#import_script_btn').click(function() {
+        // Clear textarea on modal open
+        $('#import_script_text').val('');
+        // Show modal
+        const importModal = new bootstrap.Modal(document.getElementById('importScriptModal'));
+        importModal.show();
+    });
+
+    // Confirm Import Script
+    $('#confirm_import_btn').click(function() {
+        const scriptText = $('#import_script_text').val().trim();
+        
+        // Validate input
+        if (!scriptText) {
+            alert('Please paste your script text first!');
+            return;
+        }
+        
+        // Split text into lines (supports LF/CR/CRLF)
+        const lines = scriptText.split(/\r?\n|\r/).filter(line => line.trim() !== '');
+        
+        // Validate lines
+        if (lines.length === 0) {
+            alert('No valid lines found in the script!');
+            return;
+        }
+        
+        // Step 1: Clear all existing rows
+        $('#script-container').find('.script-row').remove();
+        
+        // Step 2: Add new rows for each line (time = 0.00)
+        lines.forEach((line, idx) => {
+            addRow(
+                '0.00',  // Start time = 0.00
+                '0.00',  // End time = 0.00
+                line.trim(), 
+                idx
+            );
+        });
+        
+        // Step 3: Reset editing state
+        currentEditingRowIndex = 0;
+        selectedRowIndex = -1;
+        highlightCurrentEditingRow();
+        
+        // Step 4: Update UI
+        updateRemoveButtons();
+        
+        // Step 5: Show success message
+        audioUploadStatus.html(`
+            <div class="text-success">
+                <i class="bi bi-check-circle"></i> Successfully imported ${lines.length} sentences! All timestamps reset to 0.00s.
+            </div>
+        `);
+        
+        setTimeout(() => {
+            audioUploadStatus.html('');
+        }, 4000);
+        
+        // Step 6: Close modal
+        const importModal = bootstrap.Modal.getInstance(document.getElementById('importScriptModal'));
+        importModal.hide();
+    });
+
+    // Initialize with Existing SRT or create first row
+    const rawSrt = $('#srt_content').val();
+    const parsedRows = parseSrtToRows(rawSrt);
+    
+    if (parsedRows.length > 0) {
+        parsedRows.forEach((row, idx) => {
+            addRow(
+                roundToTwoDecimals(row.start).toFixed(2), 
+                roundToTwoDecimals(row.end).toFixed(2), 
+                row.sentence, 
+                idx
+            );
+        });
+        currentEditingRowIndex = 0;
+    } else {
+        addRow(0.00.toFixed(2), 0.10.toFixed(2), '', 0);
+        currentEditingRowIndex = 0;
+    }
+
+    highlightCurrentEditingRow();
+    audioPlayer.addEventListener('timeupdate', updatePlayerUI);
 });
 </script>
 {% endblock %}

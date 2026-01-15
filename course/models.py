@@ -126,12 +126,6 @@ class Activity(models.Model):
     order = models.IntegerField(default=0)
     html_content = models.TextField(blank=True, null=True)
     video_embed_code = models.TextField(blank=True, null=True)
-    script = models.JSONField(
-        default=list,
-        blank=True,
-        null=True,
-        help_text="Timestamps for audio captions in JSON format",
-    )
     audio_file = models.FileField(
         upload_to=audio_media_path,
         blank=True,
@@ -163,6 +157,9 @@ class Item(models.Model):
     item_category = models.CharField(max_length=20, blank=True, null=True)
     title = models.CharField(max_length=100)  # Title of the activity item
     question = models.TextField()  # Question associated with the activity item
+    hint = models.CharField(
+        max_length=100, blank=True, null=True
+    )  # Hint for the activity item
     activity = models.ForeignKey(
         Activity, on_delete=models.CASCADE, related_name="items"
     )

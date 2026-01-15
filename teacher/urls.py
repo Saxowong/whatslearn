@@ -44,4 +44,5 @@ urlpatterns = [
     ),
     path("import-items/<int:activity_id>", views.import_items, name="import_items"),
     path("export-items/<int:activity_id>", views.export_items, name="export_items"),
+    path("upload-audio/", views.upload_audio, name="upload_audio"),
 ]
