@@ -1,0 +1,496 @@
+{% extends "course/activity_detail.html" %}  <!-- Extend the same base template for consistency -->
+{% load static %}
+
+{% block extra_head %}
+    <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
+    <!-- Bootstrap Icons (ensure loaded for audio/eye/play/pause/stop icons) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <!-- Optional: Add custom styles for the table, button, separator, and Action column -->
+    <style>
+        .items-table {
+            margin-top: 2rem;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .items-table th {
+            background-color: #0d6efd;
+            color: white;
+            text-align: center;
+        }
+        .items-table td {
+            vertical-align: middle;
+            text-align: left;
+        }
+        .back-button {
+            margin-top: 2rem;
+        }
+        /* New: Styles for Start Exercise button and separator */
+        .start-exercise-button {
+            margin-top: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .content-separator {
+            height: 2px;
+            background-color: #e9ecef; /* Bootstrap light gray (matches breadcrumb/dividers) */
+            width: 100%;
+            margin-bottom: 2rem; /* Space between separator and table */
+        }
+        /* New: Styles for Action column Bootstrap buttons (minor spacing) */
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem; /* Space between audio and favorite buttons */
+            justify-content: center; /* Center buttons in the Action column */
+        }
+        /* Optional: Adjust button icon spacing for better visual alignment */
+        .btn i.bi {
+            margin-right: 0.25rem; /* Small gap between icon and text (if we add text later) */
+        }
+        /* New: Style for top button container (align Go Back, Play/Pause, and Stop buttons) */
+        .top-button-container {
+            display: flex;
+            gap: 1rem; /* Space between all buttons */
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        /* New: Fade-out animation for items being hidden */
+        .fade-out {
+            animation: fadeOut 0.5s ease-in-out;
+            opacity: 0;
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    </style>
+{% endblock %}
+
+{% block activity_content %}
+    <!-- NEW: Top Button Container (Go Back + Play/Pause + Dedicated Stop button) -->
+    <div class="top-button-container">
+        <a href="{% url 'course:activity_detail' activity.id %}" class="btn btn-primary"><< Go Back</a>
+        
+        <!-- NEW: Play/Pause Audio Button (matches Go Back button size/style) -->
+        <button id="sequential-audio-play-pause-btn" class="btn btn-primary" disabled>
+            <i class="bi bi-play-fill"></i> Play Audio
+        </button>
+
+        <!-- NEW: Dedicated Stop Audio Button (disabled by default, same style) -->
+        <button id="sequential-audio-stop-btn" class="btn btn-danger" disabled>
+            <i class="bi bi-stop-fill"></i> Stop Audio
+        </button>
+    </div>
+
+    <!-- NEW: Visual Separator (below button, above table) -->
+    <div class="content-separator"></div>
+
+    <!-- Exercise Items Table (updated with StudentItem continue_revision logic) -->
+    <div class="container">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover items-table">
+                <thead>
+                    <tr>
+                        <!-- Required Columns (plus Action column) -->
+                        <th scope="col">#</th> <!-- Number -->
+                        <th scope="col">Question Title</th> <!-- Question Title -->
+                        <th scope="col">Answer</th> <!-- Answer -->
+                        <th scope="col">Hint</th> <!-- Hint -->
+                        <th scope="col">Action</th> <!-- Action Column -->
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                        <!-- Add item.id to the row for easy lookup, and data-continue-revision for state -->
+                        <tr id="item-row-{{ item.id }}" data-item-id="{{ item.id }}" {% if item.audio %}data-audio-src="{{ item.audio.url }}"{% endif %}>
+                            <!-- Number Column -->
+                            <td scope="row">{{ item.item_number }}</td>
+                            <!-- Question Title (safe to render HTML) -->
+                            <td>{{ item.title|safe }}</td>
+                            <!-- Answer (only item.answer, as configured) -->
+                            <td>{{ item.combined_answer|safe }}</td>
+                            <!-- Hint (muted text for consistency) -->
+                            <td class="text-muted">{{ item.display_hint|safe }}</td>
+                            <!-- Action Column (Bootstrap btn-primary + btn-warning buttons) -->
+                            <td>
+                                <div class="action-buttons">
+                                    <!-- Audio Button (Bootstrap btn-primary - filled blue, toggle volume-up/stop) -->
+                                    <button class="btn btn-primary btn-sm item-audio-btn" 
+                                            {% if item.audio %}data-audio-src="{{ item.audio.url }}"{% else %}disabled title="No audio available"{% endif %}>
+                                        <i class="bi bi-volume-up-fill item-audio-icon"></i> <!-- Default: volume-up icon -->
+                                    </button>
+
+                                    <!-- View/Hide Button (Bootstrap btn-warning - filled yellow/orange, eye icons) -->
+                                    <button class="btn btn-warning btn-sm eye-toggle-btn" data-item-id="{{ item.id }}">
+                                        <i class="bi bi-eye"></i> <!-- Default: open eye icon -->
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <!-- Fallback if no visible items exist (continue_revision=True) -->
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">No items available for revision (all items are marked as complete).</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Back Button (to return to the exercise activity page) -->
+    <div class="back-button">
+        <a href="{% url 'course:activity_detail' activity.id %}" class="btn btn-primary"><< Go Back</a>
+    </div>
+
+    <!-- JavaScript for Audio Toggle, Eye Toggle, and Enhanced Sequential Playback (Play/Pause/Stop) -->
+    <script>
+        // Global variables for sequential audio playback + individual item audio tracking
+        let sequentialPlayActive = false; // Overall playback state (active/inactive)
+        let sequentialPlayPaused = false; // Pause state (only relevant if sequentialPlayActive=true)
+        let currentAudioIndex = 0;
+        let activeAudio = null;
+        let itemAudioSources = []; // Array of VALID VISIBLE item audio URLs (in order)
+        let activeIndividualAudio = null; // Track currently playing individual item audio
+        let activeIndividualBtn = null; // Track the active individual audio button
+        // New: Track audio playback position (for resume functionality)
+        let currentAudioPlaybackTime = 0;
+
+        // 1. Initialize: Collect audio sources ONLY from VISIBLE items + enable/disable buttons
+        document.addEventListener('DOMContentLoaded', function() {
+            // Collect audio sources ONLY from rendered (visible) table rows (continue_revision=True)
+            document.querySelectorAll('tbody tr[id^="item-row-"][data-audio-src]').forEach(tr => {
+                const audioSrc = tr.getAttribute('data-audio-src');
+                if (audioSrc) {
+                    itemAudioSources.push(audioSrc); // Add only visible item audio to the array
+                }
+            });
+
+            // Get button references
+            const playPauseBtn = document.getElementById('sequential-audio-play-pause-btn');
+            const stopBtn = document.getElementById('sequential-audio-stop-btn');
+
+            // Enable Play/Pause button only if there are valid VISIBLE audio sources
+            if (itemAudioSources.length > 0) {
+                playPauseBtn.disabled = false;
+            }
+            // Stop button remains disabled until playback starts
+        });
+
+        // 2. Helper Function: Refresh Visible Audio Sources (for after item is hidden)
+        function refreshVisibleAudioSources() {
+            itemAudioSources = []; // Reset the array
+            document.querySelectorAll('tbody tr[id^="item-row-"][data-audio-src]').forEach(tr => {
+                const audioSrc = tr.getAttribute('data-audio-src');
+                if (audioSrc) {
+                    itemAudioSources.push(audioSrc);
+                }
+            });
+
+            // Update button states
+            const playPauseBtn = document.getElementById('sequential-audio-play-pause-btn');
+            const stopBtn = document.getElementById('sequential-audio-stop-btn');
+
+            playPauseBtn.disabled = itemAudioSources.length === 0;
+            // Disable Stop button if no audio sources remain (and playback is inactive)
+            if (itemAudioSources.length === 0 && !sequentialPlayActive) {
+                stopBtn.disabled = true;
+            }
+        }
+
+        // 3. Enhanced: Play/Pause Button Functionality (Toggle Play ↔ Pause)
+        document.getElementById('sequential-audio-play-pause-btn').addEventListener('click', function() {
+            const playPauseBtn = this;
+            const playIcon = 'bi-play-fill';
+            const pauseIcon = 'bi-pause-fill';
+            const playPauseIcon = playPauseBtn.querySelector('i.bi');
+            const stopBtn = document.getElementById('sequential-audio-stop-btn');
+
+            // Case 1: Playback is inactive (start new playback)
+            if (!sequentialPlayActive) {
+                // Stop any active individual audio playback first
+                if (activeIndividualAudio) {
+                    activeIndividualAudio.pause();
+                    resetIndividualAudioBtn();
+                }
+
+                // Refresh audio sources right before playback (in case items were hidden earlier)
+                refreshVisibleAudioSources();
+
+                // Exit if no visible audio sources (shouldn't happen since button is disabled)
+                if (itemAudioSources.length === 0) {
+                    alert('No visible items with audio available for playback.');
+                    return;
+                }
+
+                // Set playback states
+                sequentialPlayActive = true;
+                sequentialPlayPaused = false;
+                currentAudioPlaybackTime = 0; // Reset playback position for new session
+
+                // Update Play/Pause button (Play → Pause)
+                playPauseIcon.classList.remove(playIcon);
+                playPauseIcon.classList.add(pauseIcon);
+                playPauseBtn.innerHTML = `<i class="bi bi-pause-fill"></i> Pause Audio`;
+
+                // Enable Stop button
+                stopBtn.disabled = false;
+
+                // Start playing the first VISIBLE audio item
+                playNextAudio();
+            }
+            // Case 2: Playback is active and not paused (pause playback)
+            else if (sequentialPlayActive && !sequentialPlayPaused) {
+                // Pause the currently playing audio (if any)
+                if (activeAudio) {
+                    currentAudioPlaybackTime = activeAudio.currentTime; // Save playback position
+                    activeAudio.pause();
+                }
+
+                // Set pause state
+                sequentialPlayPaused = true;
+
+                // Update Play/Pause button (Pause → Play) (for resume)
+                playPauseIcon.classList.remove(pauseIcon);
+                playPauseIcon.classList.add(playIcon);
+                playPauseBtn.innerHTML = `<i class="bi bi-play-fill"></i> Resume Audio`;
+            }
+            // Case 3: Playback is active and paused (resume playback)
+            else if (sequentialPlayActive && sequentialPlayPaused) {
+                // Resume the currently playing audio (if any)
+                if (activeAudio) {
+                    activeAudio.currentTime = currentAudioPlaybackTime; // Restore playback position
+                    activeAudio.play().catch(error => {
+                        console.error('Failed to resume sequential audio:', error);
+                        alert('Unable to resume audio. Please check your browser settings.');
+                    });
+                }
+
+                // Clear pause state
+                sequentialPlayPaused = false;
+
+                // Update Play/Pause button (Resume → Pause)
+                playPauseIcon.classList.remove(playIcon);
+                playPauseIcon.classList.add(pauseIcon);
+                playPauseBtn.innerHTML = `<i class="bi bi-pause-fill"></i> Pause Audio`;
+            }
+        });
+
+        // 4. New: Dedicated Stop Button Functionality (Stop playback entirely)
+        document.getElementById('sequential-audio-stop-btn').addEventListener('click', function() {
+            const playPauseBtn = document.getElementById('sequential-audio-play-pause-btn');
+            const playIcon = 'bi-play-fill';
+            const playPauseIcon = playPauseBtn.querySelector('i.bi');
+            const stopBtn = this;
+
+            // Reset all playback states
+            sequentialPlayActive = false;
+            sequentialPlayPaused = false;
+            currentAudioPlaybackTime = 0;
+
+            // Pause/stop the currently playing audio (if any) and reset it
+            if (activeAudio) {
+                activeAudio.pause();
+                activeAudio = null;
+            }
+
+            // Reset playback index to first item
+            currentAudioIndex = 0;
+
+            // Update Play/Pause button (revert to default Play state)
+            playPauseIcon.classList.remove('bi-pause-fill');
+            playPauseIcon.classList.add(playIcon);
+            playPauseBtn.innerHTML = `<i class="bi bi-play-fill"></i> Play Audio`;
+
+            // Disable Stop button
+            stopBtn.disabled = true;
+        });
+
+        // 5. Helper Function: Play Next Audio in Sequence (with 1s delay between items, support pause/resume)
+        function playNextAudio() {
+            // Exit if playback is stopped or no more VISIBLE audio items
+            if (!sequentialPlayActive || currentAudioIndex >= itemAudioSources.length) {
+                // Reset buttons to default state if all visible items are played
+                const playPauseBtn = document.getElementById('sequential-audio-play-pause-btn');
+                const stopBtn = document.getElementById('sequential-audio-stop-btn');
+                const playIcon = 'bi-play-fill';
+                const playPauseIcon = playPauseBtn.querySelector('i.bi');
+
+                playPauseIcon.classList.remove('bi-pause-fill');
+                playPauseIcon.classList.add(playIcon);
+                playPauseBtn.innerHTML = `<i class="bi bi-play-fill"></i> Play Audio`;
+                stopBtn.disabled = true;
+
+                // Reset playback states
+                sequentialPlayActive = false;
+                sequentialPlayPaused = false;
+                currentAudioIndex = 0;
+                currentAudioPlaybackTime = 0;
+                return;
+            }
+
+            // Exit if playback is paused (do not advance to next item)
+            if (sequentialPlayPaused) {
+                return;
+            }
+
+            // Create audio element for the current VISIBLE item
+            const audioSrc = itemAudioSources[currentAudioIndex];
+            activeAudio = new Audio(audioSrc);
+
+            // Set saved playback time (for resume after pause on the same item)
+            if (currentAudioPlaybackTime > 0) {
+                activeAudio.currentTime = currentAudioPlaybackTime;
+            }
+
+            // Play the audio
+            activeAudio.play().catch(error => {
+                console.error('Failed to play sequential audio:', error);
+                alert('Unable to play audio. Please check your browser settings.');
+            });
+
+            // When current audio ends, WAIT 1s then play the next VISIBLE item
+            activeAudio.addEventListener('ended', function() {
+                // Only proceed if playback is still active and not paused
+                if (sequentialPlayActive && !sequentialPlayPaused) {
+                    // Reset playback position for next item
+                    currentAudioPlaybackTime = 0;
+                    setTimeout(() => {
+                        currentAudioIndex++;
+                        playNextAudio(); // Recursively play next visible item after delay
+                    }, 1000); // 1000 milliseconds = 1 second
+                }
+            });
+        }
+
+        // 6. Individual Item Audio Button Functionality (toggle volume-up/stop icons)
+        document.querySelectorAll('.item-audio-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Stop sequential playback entirely if it's active (prevent conflicting audio)
+                if (sequentialPlayActive) {
+                    document.getElementById('sequential-audio-stop-btn').click(); // Trigger Stop state
+                }
+
+                const audioSrc = this.getAttribute('data-audio-src');
+                if (!audioSrc) return; // Exit if no audio available
+
+                const audioIcon = this.querySelector('.item-audio-icon');
+                const volumeUpIcon = 'bi-volume-up-fill';
+                const stopIcon = 'bi-stop-fill';
+
+                // Case 1: No active individual audio (start playing this VISIBLE item)
+                if (!activeIndividualAudio || activeIndividualBtn !== this) {
+                    // Reset previous active button (if any)
+                    resetIndividualAudioBtn();
+
+                    // Create new audio element and play
+                    activeIndividualAudio = new Audio(audioSrc);
+                    activeIndividualBtn = this;
+
+                    // Toggle icon to Stop
+                    audioIcon.classList.remove(volumeUpIcon);
+                    audioIcon.classList.add(stopIcon);
+
+                    // Play the audio
+                    activeIndividualAudio.play().catch(error => {
+                        console.error('Failed to play item audio:', error);
+                        alert('Unable to play audio. Please check your browser settings.');
+                        // Reset icon on error
+                        audioIcon.classList.remove(stopIcon);
+                        audioIcon.classList.add(volumeUpIcon);
+                        activeIndividualAudio = null;
+                        activeIndividualBtn = null;
+                    });
+
+                    // Reset icon when audio finishes playing
+                    activeIndividualAudio.addEventListener('ended', function() {
+                        resetIndividualAudioBtn();
+                    });
+                } 
+                // Case 2: Active audio is this item (stop playing)
+                else {
+                    activeIndividualAudio.pause();
+                    resetIndividualAudioBtn();
+                }
+            });
+        });
+
+        // 7. Helper Function: Reset Individual Audio Button to Default State
+        function resetIndividualAudioBtn() {
+            if (activeIndividualBtn) {
+                const audioIcon = activeIndividualBtn.querySelector('.item-audio-icon');
+                const volumeUpIcon = 'bi-volume-up-fill';
+                const stopIcon = 'bi-stop-fill';
+
+                // Revert to volume-up icon
+                audioIcon.classList.remove(stopIcon);
+                audioIcon.classList.add(volumeUpIcon);
+            }
+
+            // Reset global individual audio variables
+            activeIndividualAudio = null;
+            activeIndividualBtn = null;
+        }
+
+        // 8. Eye Toggle Button Functionality (open eye ↔ closed eye + set continue_revision=False)
+        document.querySelectorAll('.eye-toggle-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const itemId = this.getAttribute('data-item-id');
+                const itemRow = document.getElementById(`item-row-${itemId}`);
+                const eyeIcon = this.querySelector('i.bi');
+                const openEyeIcon = 'bi-eye';
+                const closedEyeIcon = 'bi-eye-slash';
+
+                // Only proceed if the item row exists
+                if (!itemRow) return;
+
+                // 8.1: Toggle eye icon visually (immediate feedback)
+                if (eyeIcon.classList.contains(openEyeIcon)) {
+                    eyeIcon.classList.remove(openEyeIcon);
+                    eyeIcon.classList.add(closedEyeIcon);
+                }
+
+                // 8.2: AJAX call to set continue_revision=False on the server
+                fetch(`{% url 'course:update_revision' %}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}', // Django CSRF token (required for POST)
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        item_id: itemId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // 8.3: Hide the item row with fade-out animation (immediate UI feedback)
+                        itemRow.classList.add('fade-out');
+                        setTimeout(() => {
+                            itemRow.remove(); // Remove the row after animation completes
+
+                            // Refresh visible audio sources after hiding an item
+                            refreshVisibleAudioSources();
+
+                            // Optional: Update item count or check if table is empty
+                            const tableBody = document.querySelector('.items-table tbody');
+                            const remainingRows = tableBody.querySelectorAll('tr:not(.fade-out)');
+                            if (remainingRows.length === 0) {
+                                tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No items available for revision (all items are marked as complete).</td></tr>`;
+                            }
+                        }, 500); // Match fade-out animation duration
+                    } else {
+                        // Revert eye icon on error
+                        eyeIcon.classList.remove(closedEyeIcon);
+                        eyeIcon.classList.add(openEyeIcon);
+                        alert('Failed to mark item as complete: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating StudentItem:', error);
+                    // Revert eye icon on network error
+                    eyeIcon.classList.remove(closedEyeIcon);
+                    eyeIcon.classList.add(openEyeIcon);
+                    alert('Failed to connect to the server. Please try again later.');
+                });
+            });
+        });
+    </script>
+{% endblock %}

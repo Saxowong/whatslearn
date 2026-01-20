@@ -9,9 +9,13 @@ from django.views.decorators.http import require_POST
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from datetime import timedelta, datetime
+from zoneinfo import ZoneInfo
 from django.urls import reverse
 from django.utils import timezone
+import json
+from random import shuffle, sample
 import logging
+
 from django.db.models import (
     OuterRef,
     Subquery,
@@ -37,9 +41,7 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
-import json
-import re
-from random import sample, shuffle
+
 from .models import (
     Course,
     Activity,
@@ -117,19 +119,27 @@ class UserEnrolledCoursesAPIView(generics.ListAPIView):
 def student_course_view(request):
     user = request.user.profile
 
-    first_course_activity_subquery = Activity.objects.filter(
-        lesson__course=OuterRef("course")
-    ).order_by("id").values("id")[:1]
+    first_course_activity_subquery = (
+        Activity.objects.filter(lesson__course=OuterRef("course"))
+        .order_by("id")
+        .values("id")[:1]
+    )
 
-    latest_student_activity_subquery = StudentActivity.objects.filter(
-        student=user,
-        activity__lesson__course=OuterRef("course")
-    ).order_by("-updated_at").values("activity_id")[:1]
+    latest_student_activity_subquery = (
+        StudentActivity.objects.filter(
+            student=user, activity__lesson__course=OuterRef("course")
+        )
+        .order_by("-updated_at")
+        .values("activity_id")[:1]
+    )
 
-    first_student_activity_subquery = StudentActivity.objects.filter(
-        student=user,
-        activity__lesson__course=OuterRef("course")
-    ).order_by("updated_at").values("activity_id")[:1]
+    first_student_activity_subquery = (
+        StudentActivity.objects.filter(
+            student=user, activity__lesson__course=OuterRef("course")
+        )
+        .order_by("updated_at")
+        .values("activity_id")[:1]
+    )
 
     enrollments = (
         StudentCourse.objects.filter(student=user)
@@ -182,12 +192,12 @@ def student_course_view(request):
             latest_activity_id=Coalesce(
                 Subquery(latest_student_activity_subquery, output_field=IntegerField()),
                 Subquery(first_course_activity_subquery, output_field=IntegerField()),
-                output_field=IntegerField()
+                output_field=IntegerField(),
             ),
             first_activity_id=Coalesce(
                 Subquery(first_student_activity_subquery, output_field=IntegerField()),
                 Subquery(first_course_activity_subquery, output_field=IntegerField()),
-                output_field=IntegerField()
+                output_field=IntegerField(),
             ),
         )
         .order_by("-updated_at")
@@ -203,16 +213,17 @@ def available_courses_view(request):
     user = request.user.profile
 
     # Get all courses NOT enrolled by the user and are published
-    unenrolled_courses = Course.objects.exclude(
-        id__in=StudentCourse.objects.filter(student=user).values("course_id")
-    ).filter(
-        is_published=True
-    ).order_by(
-        "-created_at"
+    unenrolled_courses = (
+        Course.objects.exclude(
+            id__in=StudentCourse.objects.filter(student=user).values("course_id")
+        )
+        .filter(is_published=True)
+        .order_by("-created_at")
     )  # Order by newest first
 
     context = {"courses": unenrolled_courses}
     return render(request, "course/available_courses.html", context)
+
 
 @login_required
 def revision_view(request, course_id):
@@ -271,16 +282,20 @@ def revision_view(request, course_id):
         .values(
             "id",
             "item__id",
+            "item__title",
             "item__item_type",
             "item__question",
+            "item__hint",
             "item__answer",
             "item__answer1",
             "item__answer2",
             "item__answer3",
             "item__answer4",
+            "item__number_answers",
             "item__image",
             "item__audio",
-            "item__audio_play",  # Added for audio_play support
+            "item__audio_play",
+            "item__activity_id",
             "successes",
             "is_master",
             "next_1",
@@ -300,23 +315,25 @@ def revision_view(request, course_id):
                 item__activity__lesson__course=course,
                 continue_revision=True,
             )
-            .exclude(
-                id__in=[item["id"] for item in items]
-            )
+            .exclude(id__in=[item["id"] for item in items])
             .select_related("item__activity")
             .values(
                 "id",
                 "item__id",
+                "item__title",
                 "item__item_type",
                 "item__question",
+                "item__hint",
                 "item__answer",
                 "item__answer1",
                 "item__answer2",
                 "item__answer3",
                 "item__answer4",
+                "item__number_answers",
                 "item__image",
                 "item__audio",
-                "item__audio_play",  # Added for audio_play support
+                "item__audio_play",
+                "item__activity_id",
                 "successes",
                 "is_master",
                 "next_1",
@@ -327,45 +344,93 @@ def revision_view(request, course_id):
             .order_by("successes", "id")[:remaining_count]
         )
         items.extend(additional_items)
-    # Get all possible answers for generating alternatives for flash cards
-    all_answers = (
-        Item.objects.filter(activity__lesson__course=course)
-        .exclude(answer__isnull=True)
-        .values_list("answer", flat=True)
-        .distinct()
-    )
+
     course.revision_items = []
     for item in items:
-        item_data = {
-            "id": item["id"],
-            "item_id": item["item__id"],
-            "item_type": item["item__item_type"],
-            "question": item["item__question"],
-            "answer": item["item__answer"],
-            "answer1": item["item__answer1"],
-            "answer2": item["item__answer2"],
-            "answer3": item["item__answer3"],
-            "answer4": item["item__answer4"],
-            "audio_play": item["item__audio_play"],  # Added for audio_play support
-            "successes": item["successes"],
-            "is_master": item["is_master"],
-            "next_1": item["next_1"],
-            "next_2": item["next_2"],
-            "revise_at": (item["revise_at"].isoformat() if item["revise_at"] else None),
-            "continue_revision": item["continue_revision"],
-        }
-        # Generate three alternative wrong answers for flash cards
-        if item["item__item_type"] == "card":
-            wrong_answers = list(set(all_answers) - {item["item__answer"]})
+        # Collect answer options
+        options = []
+        correct_answer = None
+        correct_sequence = []
+        if item["item__item_type"] == "blank":
+            # Only include non-empty answers from answer1 to answer4
+            answers = [
+                ans
+                for ans in [
+                    item["item__answer1"],
+                    item["item__answer2"],
+                    item["item__answer3"],
+                    item["item__answer4"],
+                ]
+                if ans and ans.strip()
+            ]
+            options = answers
+            correct_answer = item["item__answer1"] or ""  # Fallback for blank items
+            correct_sequence = answers  # Sequence for fill-in-the-blank
+            shuffle(options)
+        elif item["item__item_type"] == "card":
+            # For flash cards, include the correct answer plus distractors from the same activity
+            activity_id = item["item__activity_id"]
+            wrong_answers = (
+                Item.objects.filter(activity_id=activity_id, item_type="card")
+                .exclude(id=item["item__id"])
+                .exclude(answer__isnull=True)
+                .values_list("answer", flat=True)
+                .distinct()
+            )
+            wrong_answers = list(wrong_answers)
             wrong_answers = (
                 wrong_answers[:3]
                 if len(wrong_answers) >= 3
                 else wrong_answers
                 + ["Option " + str(i) for i in range(1, 4 - len(wrong_answers) + 1)]
             )
-            item_data["wrong_answers"] = wrong_answers
-        else:
-            item_data["wrong_answers"] = []
+            options = [item["item__answer"]] + wrong_answers
+            correct_answer = item["item__answer"] or ""
+            correct_sequence = [correct_answer]
+            shuffle(options)
+        elif item["item__item_type"] == "mc":
+            # For multiple-choice, include answer1 to answer4
+            answers = [
+                ans
+                for ans in [
+                    item["item__answer1"],
+                    item["item__answer2"],
+                    item["item__answer3"],
+                    item["item__answer4"],
+                ]
+                if ans and ans.strip()
+            ]
+            options = answers
+            correct_answer = (
+                item["item__answer"] or ""
+            )  # Use item__answer as the correct answer
+            correct_sequence = [correct_answer]
+            shuffle(options)
+
+        item_data = {
+            "id": item["id"],
+            "item_id": item["item__id"],
+            "item_type": item["item__item_type"],
+            "title": item["item__title"],
+            "hint": item["item__hint"],
+            "question": item["item__question"],
+            "answer": item["item__answer"],
+            "answer1": item["item__answer1"],
+            "answer2": item["item__answer2"],
+            "answer3": item["item__answer3"],
+            "answer4": item["item__answer4"],
+            "number_answers": item["item__number_answers"] or 1,
+            "audio_play": item["item__audio_play"],
+            "successes": item["successes"],
+            "is_master": item["is_master"],
+            "next_1": item["next_1"],
+            "next_2": item["next_2"],
+            "revise_at": (item["revise_at"].isoformat() if item["revise_at"] else None),
+            "continue_revision": item["continue_revision"],
+            "options": options,
+            "correct_answer": correct_answer,
+            "correct_sequence_json": json.dumps(correct_sequence),
+        }
         # Handle image and audio files
         if item["item__image"]:
             try:
@@ -378,6 +443,7 @@ def revision_view(request, course_id):
             except (Item.DoesNotExist, ValueError):
                 item_data["audio"] = None
         course.revision_items.append(item_data)
+
     context = {
         "courses": revision_courses,
         "first_course": course,
@@ -522,6 +588,7 @@ def submit_revision(request, course_id):
             status=500,
         )
 
+
 @login_required
 def course_view(request, course_id):
     student_profile = request.user.profile
@@ -533,29 +600,26 @@ def course_view(request, course_id):
                     Prefetch(
                         "activities",
                         queryset=Activity.objects.annotate(
-                            total_items=Count("items"),
-                            mastered_items=Coalesce(
-                                Subquery(
-                                    StudentItem.objects.filter(
-                                        student=student_profile,
-                                        item__activity=OuterRef("pk"),
-                                        successes__gte=3,
-                                    )
-                                    .values("item__activity")
-                                    .annotate(count=Count("pk"))
-                                    .values("count")[:1],
-                                    output_field=IntegerField(),
-                                ),
-                                0,
-                            ),
+                            # -------------------------- MODIFICATION 1: Remove On-The-Fly Progress Calculations (Keep Nothing Related to total_items/mastered_items) --------------------------
+                            # DELETED: total_items=Count("items")
+                            # DELETED: mastered_items=Coalesce(...)
+                            # -------------------------- MODIFICATION 2: Retrieve Stored StudentActivity.progress (Replace On-The-Fly student_progress) --------------------------
                             student_progress=Coalesce(
-                                ExpressionWrapper(
-                                    (F("mastered_items") / F("total_items")) * 100,
+                                Subquery(
+                                    StudentActivity.objects.filter(
+                                        activity=OuterRef(
+                                            "pk"
+                                        ),  # Link to current Activity
+                                        student=student_profile,  # Link to current student
+                                    ).values("progress")[
+                                        :1
+                                    ],  # Fetch stored progress value from StudentActivity
                                     output_field=FloatField(),
                                 ),
-                                0.0,
+                                0.0,  # Default to 0% if no StudentActivity record exists
                                 output_field=FloatField(),
                             ),
+                            # -------------------------- UNCHANGED: student_completed (Already Fetches Stored StudentActivity Value) --------------------------
                             student_completed=Coalesce(
                                 Subquery(
                                     StudentActivity.objects.filter(
@@ -571,6 +635,7 @@ def course_view(request, course_id):
                 ).order_by("order"),
             )
         ).annotate(
+            # -------------------------- UNCHANGED: All Course-Level Annotations --------------------------
             revision_items_count=Subquery(
                 StudentItem.objects.filter(
                     student=student_profile,
@@ -580,40 +645,40 @@ def course_view(request, course_id):
                 .values("student")
                 .annotate(count=Count("id"))
                 .values("count")[:1],
-                output_field=IntegerField()
+                output_field=IntegerField(),
             ),
             activities_completed=Subquery(
                 StudentActivity.objects.filter(
                     student=student_profile,
                     activity__lesson__course=OuterRef("pk"),
-                    completed=True
+                    completed=True,
                 )
                 .values("student")
                 .annotate(count=Count("id"))
                 .values("count")[:1],
-                output_field=IntegerField()
-            ),
-            exercise_items_mastered=Subquery(
-                StudentItem.objects.filter(
-                    student=student_profile,
-                    item__activity__lesson__course=OuterRef("pk"),
-                    successes__gte=3,
-                )
-                .values("student")
-                .annotate(count=Count("id"))
-                .values("count")[:1],
-                output_field=IntegerField()
+                output_field=IntegerField(),
             ),
         ),
         id=course_id,
     )
-    # Assign continuous numbering to activities across lessons
+    # -------------------------- UNCHANGED: Category Progress (Exact Original Logic) --------------------------
+    category_progress = (
+        StudentItem.objects.filter(
+            student=student_profile,
+            item__activity__lesson__course=course,
+            successes__gte=3,
+        )
+        .values("item__item_category")
+        .annotate(mastered_count=Count("id"))
+        .order_by("item__item_category")
+    )
+    # -------------------------- UNCHANGED: Continuous Activity Numbering --------------------------
     activity_counter = 1
     for lesson in course.lessons.all():
         for activity in lesson.activities.all():
             activity.global_index = activity_counter
             activity_counter += 1
-    # Update StudentCourse's updated_at
+    # -------------------------- UNCHANGED: Update StudentCourse Timestamp --------------------------
     try:
         enrollment = StudentCourse.objects.get(student=student_profile, course=course)
         enrollment.save()  # auto_now=True updates timestamp
@@ -625,26 +690,31 @@ def course_view(request, course_id):
         {
             "course": course,
             "student_profile": student_profile,
+            "category_progress": category_progress,
         },
     )
 
+
 @login_required
 def activity_view(request, activity_id):
-    # Get the activity and verify course enrollment
+    from random import shuffle
+    from django.utils import timezone
+    import json
+
     activity = get_object_or_404(
         Activity.objects.select_related("lesson__course"), pk=activity_id
     )
     lesson = activity.lesson
     course = lesson.course
-    # Verify enrollment
+
     if not StudentCourse.objects.filter(
         student=request.user.profile, course=course
     ).exists():
         raise PermissionDenied("You are not enrolled in this course")
-    # Get ALL activities in the course in lesson-order + activity-order
+
+    # Navigation: all activities in course
     all_activities = (
-        Activity.objects
-        .filter(lesson__course=course)
+        Activity.objects.filter(lesson__course=course)
         .select_related("lesson")
         .annotate(
             student_progress=Coalesce(
@@ -664,114 +734,410 @@ def activity_view(request, activity_id):
                 ),
                 False,
                 output_field=BooleanField(),
-            )
+            ),
         )
         .order_by("lesson__order", "order")
     )
-    # Assign global index across entire course
+
     counter = 1
     for a in all_activities:
         a.global_index = counter
         counter += 1
-    # Find previous and next activities
+
     previous_activity = None
     next_activity = None
     all_activities_list = list(all_activities)
     for i, a in enumerate(all_activities_list):
         if a.id == activity.id:
-            if i > 0:  # If not the first activity
+            if i > 0:
                 previous_activity = all_activities_list[i - 1]
-            if i < len(all_activities_list) - 1:  # If not the last activity
+            if i < len(all_activities_list) - 1:
                 next_activity = all_activities_list[i + 1]
             break
-    # Filter the RHS list to only current lesson’s activities, but keep global_index
+
     lesson_activities = [a for a in all_activities if a.lesson_id == lesson.id]
-    # Get or create StudentActivity record for this activity
+
     student_activity, created = StudentActivity.objects.get_or_create(
         student=request.user.profile,
         activity=activity,
         defaults={"progress": 0.0, "completed": False},
     )
-    mastered_items_count = 0
-    if activity.activity_type == "exercise":
-        total_items = activity.items.count()
-        mastered_items_count = StudentItem.objects.filter(
-            student=request.user.profile, item__activity=activity, is_master=True
-        ).count()
-        progress = (
-            (mastered_items_count / total_items) * 100 if total_items > 0 else 0.0
-        )
-        student_activity.progress = progress
-        student_activity.completed = progress >= 100
-        student_activity.save()
-    # Always update last accessed time
-    student_activity.updated_at = timezone.now()
-    student_activity.save(update_fields=["updated_at"])
+
     context = {
         "activity": activity,
         "student_activity": student_activity,
         "is_enrolled": True,
         "course_id": course.id,
-        "mastered_items_count": (
-            mastered_items_count if activity.activity_type == "exercise" else 0
-        ),
-        "progress_percentage": student_activity.progress,
-        "activities": lesson_activities,  # RHS lesson activities with global_index
-        "previous_activity": previous_activity,  # Added for Previous button
-        "next_activity": next_activity,  # Added for Next button
+        "activities": lesson_activities,
+        "previous_activity": previous_activity,
+        "next_activity": next_activity,
     }
+
     if activity.activity_type == "exercise":
-        items = list(activity.items.all())
-        student_items = {
-            si.item_id: si
-            for si in StudentItem.objects.filter(
-                student=request.user.profile, item__in=items
-            )
-        }
-        for item in items:
-            student_item = student_items.get(item.id)
-            item.successes = student_item.successes if student_item else 0
-            item.is_master = student_item.is_master if student_item else False
-            item.revise_at = student_item.revise_at if student_item else None
-            item.updated_at = student_item.updated_at if student_item else None
-            item.next_1 = student_item.next_1 if student_item else 1
-            item.next_2 = student_item.next_2 if student_item else 1
-            # Log item data for debugging
-            logger.debug(f"Processing item ID: {item.id}, Type: {item.item_type}, Question: {item.question}")
-            logger.debug(f"Answers: answer1={getattr(item, 'answer1', None)}, answer2={getattr(item, 'answer2', None)}, answer3={getattr(item, 'answer3', None)}, answer4={getattr(item, 'answer4', None)}")
-            if item.item_type == "mc":
-                options = [getattr(item, 'answer1', ''), getattr(item, 'answer2', ''), getattr(item, 'answer3', ''), getattr(item, 'answer4', '')]
-                options = [opt for opt in options if opt.strip() != '']
-                shuffle(options)
-                item.options = options
-                item.correct_answer = item.answer
-                item.correct_sequence_json = json.dumps([])
-                logger.debug(f"MC Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}")
+        # Get ALL items
+        all_items = list(activity.items.all())
+
+        # StudentItem data
+        student_items_qs = StudentItem.objects.filter(
+            student=request.user.profile, item__in=all_items
+        )
+        student_items_dict = {si.item_id: si for si in student_items_qs}
+
+        # Separate active vs skipped + attach attributes
+        active_items = []
+        skipped_items = []
+        for item in all_items:
+            si = student_items_dict.get(item.id)
+            item.successes = si.successes if si else 0
+            item.is_master = si.is_master if si else False
+            item.continue_revision = si.continue_revision if si else True
+            item.revise_at = si.revise_at if si else None
+            item.next_1 = si.next_1 if si else 1
+            item.next_2 = si.next_2 if si else 1
+            item.audio_play = getattr(item, "audio_play", "start")
+
+            # Audio URL logic
+            if not item.audio and item.title:
+                from django.utils.html import strip_tags
+
+                text = strip_tags(item.title).strip().lower()
+                first_word = text.split()[0] if text else ""
+                item.audio_url = (
+                    f"/media/mp3/{first_word[0]}/{first_word}.mp3" if first_word else ""
+                )
             else:
-                # For card
-                wrong_answers = [
-                    i.answer for i in items if i.id != item.id and i.answer and i.answer != item.answer
-                ]
-                if len(wrong_answers) < 3:
-                    wrong_answers.extend(
-                        ["Alternative option 1", "Alternative option 2"][: 3 - len(wrong_answers)]
-                    )
-                selected_wrong = sample(wrong_answers, 3)
-                options = [item.answer] + selected_wrong
+                item.audio_url = item.audio.url if item.audio else ""
+
+            if item.continue_revision:
+                active_items.append(item)
+            else:
+                skipped_items.append(item)
+
+        # ======================
+        # NEW: SORT ACTIVE ITEMS BY YOUR PRIORITY RULES
+        # Priority 1: Started but not mastered (successes 1 or 2)
+        # Priority 2: Not started (successes 0)
+        # Priority 3: Mastered (successes >=3 or is_master=True)
+        # ======================
+        def get_priority_key(item):
+            # Define priority tiers (lower number = higher priority)
+            if 1 <= item.successes <= 2:
+                return 0  # Highest priority (started but not mastered)
+            elif item.successes == 0:
+                return 1  # Second priority (not started)
+            else:
+                return 2  # Lowest priority (mastered)
+
+        # Sort active items by priority tier, then by successes (ascending)
+        active_items_sorted = sorted(
+            active_items,
+            key=lambda x: (
+                get_priority_key(x),  # Main priority tier
+                x.successes,  # Within tier: fewer successes first
+            ),
+        )
+
+        # Select up to 10 from sorted active items
+        selected_items = active_items_sorted[:10]
+
+        # If still need more items (active items < 10), add from skipped items
+        if len(selected_items) < 10:
+            needed = 10 - len(selected_items)
+            # Shuffle skipped items to avoid bias when adding
+            shuffle(skipped_items)
+            selected_items.extend(skipped_items[:needed])
+
+        # Optional: Shuffle selected items to avoid predictable order (keeps priority logic intact)
+        shuffle(selected_items)
+
+        # ======================
+        # END NEW PRIORITY LOGIC
+        # ======================
+
+        # Shuffle and prepare options for selected items
+        for item in selected_items:
+            if item.item_type == "mc":
+                options = [getattr(item, f"answer{i}", "") for i in range(1, 5)]
+                options = [o.strip() for o in options if o.strip()]
                 shuffle(options)
                 item.options = options
-                item.correct_answer = item.answer
+                item.correct_answer = item.answer or ""
                 item.correct_sequence_json = json.dumps([])
-                logger.debug(f"Card Item ID: {item.id}, Options: {item.options}, Correct Answer: {item.correct_answer}")
-        context["items"] = items
+                item.number_answers = 0
+
+            elif item.item_type == "blank":
+                blanks = item.number_answers or 0
+                if not (1 <= blanks <= 4):
+                    item.options = []
+                    item.correct_sequence_json = json.dumps([])
+                    item.number_answers = 0
+                    continue
+                correct_seq = [
+                    getattr(item, f"answer{i}", "").strip()
+                    for i in range(1, blanks + 1)
+                    if getattr(item, f"answer{i}", "").strip()
+                ]
+                distractors = [
+                    getattr(item, f"answer{i}", "").strip()
+                    for i in range(blanks + 1, 5)
+                    if getattr(item, f"answer{i}", "").strip()
+                ]
+                options = correct_seq[:]
+                needed = max(0, 4 - len(options))
+                if len(distractors) < needed:
+                    distractors.extend(
+                        [
+                            f"Option {i}"
+                            for i in range(1, needed + 1 - len(distractors) + 1)
+                        ]
+                    )
+                options.extend(distractors[:needed])
+                shuffle(options)
+                item.options = options
+                item.correct_sequence = correct_seq
+                item.correct_sequence_json = json.dumps(correct_seq)
+                item.number_answers = blanks
+
+            else:  # card type
+                wrong = [
+                    i.answer
+                    for i in all_items
+                    if i.id != item.id and i.answer and i.answer != item.answer
+                ]
+                if len(wrong) < 3:
+                    wrong.extend(
+                        ["Alternative 1", "Alternative 2", "Alternative 3"][
+                            : 3 - len(wrong)
+                        ]
+                    )
+                wrongs = wrong[:3]
+                shuffle(wrongs)
+                options = [item.answer or ""] + wrongs
+                shuffle(options)
+                item.options = options
+                item.correct_answer = item.answer or ""
+                item.correct_sequence_json = json.dumps([])
+                item.number_answers = 0
+
+        # === OVERALL MASTERY FOR WELCOME BLOCK (includes skipped) ===
+        total_items_all = len(all_items)
+        mastered_total = sum(
+            1
+            for item in all_items
+            if student_items_dict.get(item.id) and student_items_dict[item.id].is_master
+        )
+
+        # Calculate progress (mastered items / total items) * 100
+        progress = (
+            (mastered_total / total_items_all) * 100 if total_items_all > 0 else 100
+        )
+        student_activity.progress = progress
+        student_activity.completed = progress >= 100  # Completed when 100% mastered
+        student_activity.updated_at = timezone.now()
+        student_activity.save()
+
+        # Pass to template
+        context.update(
+            {
+                "items": selected_items,
+                "mastered_items_count": mastered_total,
+                "total_items": total_items_all,
+            }
+        )
         template_name = "course/exercise_activity.html"
+
     elif activity.activity_type == "video":
         template_name = "course/video_activity.html"
     elif activity.activity_type == "pdf":
         template_name = "course/pdf_activity.html"
     else:
         template_name = "course/html_activity.html"
+
     return render(request, template_name, context)
+
+
+def update_revision(request):
+    """AJAX endpoint to set StudentItem.continue_revision=False (preserve all other fields)."""
+    try:
+        import json
+
+        data = json.loads(request.body)
+        item_id = data.get("item_id")
+
+        if not item_id:
+            return JsonResponse({"success": False, "error": "Item ID is required."})
+
+        # Get current student's profile
+        try:
+            current_student_profile = request.user.profile
+        except Profile.DoesNotExist:
+            return JsonResponse(
+                {"success": False, "error": "Student profile not found."}
+            )
+
+        # ---------- Critical Fix for Issue 2: Preserve all other fields ----------
+        # Option 1: Update EXISTING StudentItem record (if it exists)
+        try:
+            student_item = StudentItem.objects.get(
+                student=current_student_profile, item_id=item_id
+            )
+
+            # ONLY update the continue_revision field (leave all others untouched)
+            student_item.continue_revision = False
+            # updated_at is auto-set via model's auto_now=True, so no need to manually update
+            student_item.save()
+
+        # Option 2: Create NEW StudentItem record (only if no existing record)
+        # Use model defaults for all fields EXCEPT continue_revision=False
+        except StudentItem.DoesNotExist:
+            StudentItem.objects.create(
+                student=current_student_profile,
+                item_id=item_id,
+                continue_revision=False,  # Explicitly set only this field
+                # All other fields use StudentItem model defaults (no need to specify)
+                # successes=0, is_master=False, next_1=1, next_2=1, etc.
+            )
+
+        # Return success response
+        return JsonResponse({"success": True})
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)})
+
+
+# Add @login_required to ensure we have a logged-in user (required for student progress)
+@login_required
+def view_items(request, activity_id):
+    # 1. Fetch the Activity object (404 if not found)
+    activity = get_object_or_404(Activity, id=activity_id)
+
+    # 2. Fetch the related Lesson (to get all activities in the lesson)
+    lesson = activity.lesson
+
+    # 3. Fetch ALL activities for the lesson (sorted by order)
+    activities = Activity.objects.filter(lesson=lesson).order_by("order")
+
+    # 4. Attach student-specific progress data via StudentActivity
+    try:
+        current_student_profile = request.user.profile
+    except Profile.DoesNotExist:
+        current_student_profile = None
+        student_activity_records = []
+    else:
+        student_activity_records = StudentActivity.objects.filter(
+            student=current_student_profile,
+            activity__in=activities,
+        ).select_related("activity")
+
+    # 4.3: StudentActivity lookup dictionary
+    student_activity_lookup = {
+        record.activity.id: record for record in student_activity_records
+    }
+
+    # 4.4: Attach template-required attributes to each Activity
+    for a in activities:
+        activity_record = student_activity_lookup.get(a.id)
+        if a.activity_type == "exercise":
+            a.student_progress = (
+                round(activity_record.progress, 0)
+                if (activity_record and activity_record.progress is not None)
+                else 0
+            )
+        else:
+            a.student_completed = (
+                activity_record.completed if activity_record else False
+            )
+
+    # 5. Previous/next activity logic (unchanged)
+    activity_list = list(activities)
+    current_index = activity_list.index(activity) if activity in activity_list else 0
+    previous_activity = activity_list[current_index - 1] if current_index > 0 else None
+    next_activity = (
+        activity_list[current_index + 1]
+        if current_index < len(activity_list) - 1
+        else None
+    )
+
+    # 6. Fetch ALL related Item objects for the activity (sorted by order)
+    all_items = Item.objects.filter(activity=activity).order_by("order")
+
+    # 7. Critical Fix: Fetch EXISTING StudentItem records (preserve all fields)
+    student_item_lookup = {}
+    if current_student_profile:
+        # Fetch ALL StudentItem records for the current student and this activity's items
+        # This preserves ALL fields (successes, is_master, etc.) from the database
+        student_item_records = StudentItem.objects.filter(
+            student=current_student_profile, item__in=all_items
+        ).select_related("item")
+
+        # Convert to lookup dictionary (item_id -> full StudentItem record)
+        student_item_lookup = {
+            record.item.id: record for record in student_item_records
+        }
+
+    # 8. Process items: Attach StudentItem data & FILTER ONLY continue_revision=True
+    processed_items = []
+    visible_item_index = 1  # Only increment for visible items (no gaps in numbering)
+
+    for item in all_items:
+        # Get the EXISTING StudentItem record (if it exists)
+        student_item_record = student_item_lookup.get(item.id)
+
+        # ---------- Critical Fix for Issue 1: Strict continue_revision logic ----------
+        # Priority 1: Use existing StudentItem's continue_revision (if record exists)
+        # Priority 2: Default to True ONLY if NO StudentItem record exists
+        if student_item_record:
+            item.continue_revision = student_item_record.continue_revision
+            # Optional: Attach other StudentItem fields to the item (for template use if needed)
+            item.successes = student_item_record.successes
+            item.is_master = student_item_record.is_master
+            item.next_1 = student_item_record.next_1
+            item.next_2 = student_item_record.next_2
+        else:
+            item.continue_revision = (
+                True  # Default only for new items (no existing record)
+            )
+            # Attach model defaults for other fields (matching StudentItem model)
+            item.successes = 0
+            item.is_master = False
+            item.next_1 = 1
+            item.next_2 = 1
+
+        # ---------- Only add items with continue_revision=True to processed_items ----------
+        if item.continue_revision:
+            # Set item number (only for visible items)
+            item.item_number = visible_item_index
+            visible_item_index += 1
+
+            # Process answer/hint (unchanged)
+            item.combined_answer = (
+                item.answer.strip()
+                if (item.answer and item.answer.strip())
+                else "No answer provided"
+            )
+            item.display_hint = (
+                item.hint.strip()
+                if (item.hint and item.hint.strip())
+                else "No hint available"
+            )
+
+            # Add to processed items (passed to template)
+            processed_items.append(item)
+
+    # 9. Pass data to template (use processed_items = only visible items)
+    context = {
+        "activity": activity,
+        "items": processed_items,  # Filtered: only continue_revision=True
+        "total_items": len(processed_items),
+        "course_id": activity.lesson.course.id,
+        "activities": activities,
+        "previous_activity": previous_activity,
+        "next_activity": next_activity,
+    }
+
+    # 10. Render template
+    return render(request, "course/view_items.html", context)
+
 
 @require_POST
 @login_required
@@ -785,88 +1151,123 @@ def submit_activity_view(request, activity_id):
         with transaction.atomic():
             if responses:
                 for response in responses:
-                    # Get existing StudentItem
+                    item_id = response.get("item_id")
+                    successes = response.get("successes", 0)
+                    continue_revision = response.get(
+                        "continue_revision", True
+                    )  # bool from frontend
+                    revise_at_str = response.get("revise_at")  # e.g., "2099-12-31"
+                    next_1 = response.get("next_1", 1)
+                    next_2 = response.get("next_2", 1)
+
                     try:
                         student_item = StudentItem.objects.get(
-                            student=student_profile, item_id=response["item_id"]
+                            student=student_profile, item_id=item_id
                         )
-                        current_next_1 = student_item.next_1
-                        current_next_2 = student_item.next_2
-                        current_revise_at = student_item.revise_at
                     except StudentItem.DoesNotExist:
-                        current_next_1 = 1
-                        current_next_2 = 1
-                        current_revise_at = None
+                        student_item = None
 
-                    # Determine if item is mastered
-                    is_master = response["successes"] >= 3
-
-                    # Initialize defaults
+                    # Default values
                     defaults = {
-                        "successes": response["successes"],
-                        "is_master": is_master,
+                        "successes": successes,
+                        "is_master": successes >= 3,
                         "updated_at": timezone.now(),
                     }
-                    # Update revision fields only for mastered items
-                    if is_master:
-                        if current_revise_at and timezone.now() < current_revise_at:
-                            # Review not due: extend revise_at, keep next_1 and next_2 unchanged
+
+                    # CASE 1: User clicked "Skip future revision" → trust frontend values completely
+                    if not continue_revision:
+                        # Convert revise_at string to timezone-aware datetime
+                        if revise_at_str:
+                            try:
+                                revise_at_dt = datetime.fromisoformat(revise_at_str)
+                                if revise_at_dt.tzinfo is None:
+                                    revise_at_dt = revise_at_dt.replace(
+                                        tzinfo=ZoneInfo("UTC")
+                                    )
+                            except ValueError:
+                                revise_at_dt = datetime(
+                                    2099, 12, 31, tzinfo=ZoneInfo("UTC")
+                                )
+                        else:
+                            revise_at_dt = datetime(
+                                2099, 12, 31, tzinfo=ZoneInfo("UTC")
+                            )
+
+                        defaults.update(
+                            {
+                                "continue_revision": False,
+                                "revise_at": revise_at_dt,
+                                "next_1": 9999,
+                                "next_2": 9999,
+                                "is_master": True,  # Skipped items are considered mastered
+                            }
+                        )
+
+                    # CASE 2: Normal practice → apply spaced repetition logic
+                    else:
+                        current_next_1 = student_item.next_1 if student_item else 1
+                        current_next_2 = student_item.next_2 if student_item else 1
+                        current_revise_at = (
+                            student_item.revise_at if student_item else None
+                        )
+
+                        is_master = successes >= 3
+
+                        if is_master:
+                            if current_revise_at and timezone.now() < current_revise_at:
+                                # Early review
+                                defaults.update(
+                                    {
+                                        "revise_at": timezone.now()
+                                        + timedelta(days=current_next_2),
+                                        "next_1": current_next_1,
+                                        "next_2": current_next_2,
+                                    }
+                                )
+                            else:
+                                # Normal progression
+                                defaults.update(
+                                    {
+                                        "revise_at": timezone.now()
+                                        + timedelta(days=current_next_2),
+                                        "next_1": current_next_2,
+                                        "next_2": current_next_1 + current_next_2,
+                                    }
+                                )
+                        else:
+                            # Not mastered yet
                             defaults.update(
                                 {
-                                    "revise_at": timezone.now()
-                                    + timedelta(days=current_next_2),
+                                    "revise_at": current_revise_at or timezone.now(),
                                     "next_1": current_next_1,
                                     "next_2": current_next_2,
                                 }
                             )
-                        else:
-                            # Review due/overdue or no revise_at: full update
-                            defaults.update(
-                                {
-                                    "revise_at": timezone.now()
-                                    + timedelta(days=current_next_2),
-                                    "next_1": current_next_2,
-                                    "next_2": current_next_1 + current_next_2,
-                                }
-                            )
-                    else:
-                        # Non-mastered: retain existing or default values
-                        defaults.update(
-                            {
-                                "revise_at": current_revise_at or timezone.now(),
-                                "next_1": current_next_1,
-                                "next_2": current_next_2,
-                            }
-                        )
 
-                    # Update or create StudentItem
-                    student_item, created = StudentItem.objects.update_or_create(
+                        defaults["continue_revision"] = True
+
+                    # Create or update the StudentItem
+                    student_item_obj, created = StudentItem.objects.update_or_create(
                         student=student_profile,
-                        item_id=response["item_id"],
+                        item_id=item_id,
                         defaults=defaults,
                     )
 
-                    # Set start_at for new items
                     if created:
-                        student_item.start_at = timezone.now()
-                        student_item.save()
+                        student_item_obj.start_at = timezone.now()
+                        student_item_obj.save()
 
-                # Update activity progress
-                total_items = Item.objects.filter(activity=activity).count()
-                mastered_items = StudentItem.objects.filter(
-                    student=student_profile, item__activity=activity, successes__gte=3
-                ).count()
+            # Update activity progress (count mastered + skipped items)
+            total_items = Item.objects.filter(activity=activity).count()
+            mastered_items = StudentItem.objects.filter(
+                student=student_profile,
+                item__activity=activity,
+                is_master=True,
+            ).count()
 
-                progress = (
-                    (mastered_items / total_items) * 100 if total_items > 0 else 0
-                )
-                completed_status = is_completed or progress >= 100
-            else:
-                # Non-exercise activities
-                progress = 0
-                completed_status = is_completed
+            progress = (mastered_items / total_items) * 100 if total_items > 0 else 0
+            completed_status = is_completed or progress >= 100
 
-            # Update StudentActivity
             StudentActivity.objects.update_or_create(
                 student=student_profile,
                 activity=activity,

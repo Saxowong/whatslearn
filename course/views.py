@@ -15,6 +15,7 @@ from django.utils import timezone
 import json
 from random import shuffle, sample
 import logging
+
 from django.db.models import (
     OuterRef,
     Subquery,
@@ -955,13 +956,199 @@ def activity_view(request, activity_id):
     return render(request, template_name, context)
 
 
+def update_revision(request):
+    """AJAX endpoint to set StudentItem.continue_revision=False (preserve all other fields)."""
+    try:
+        import json
+
+        data = json.loads(request.body)
+        item_id = data.get("item_id")
+
+        if not item_id:
+            return JsonResponse({"success": False, "error": "Item ID is required."})
+
+        # Get current student's profile
+        try:
+            current_student_profile = request.user.profile
+        except Profile.DoesNotExist:
+            return JsonResponse(
+                {"success": False, "error": "Student profile not found."}
+            )
+
+        # ---------- Critical Fix for Issue 2: Preserve all other fields ----------
+        # Option 1: Update EXISTING StudentItem record (if it exists)
+        try:
+            student_item = StudentItem.objects.get(
+                student=current_student_profile, item_id=item_id
+            )
+
+            # ONLY update the continue_revision field (leave all others untouched)
+            student_item.continue_revision = False
+            # updated_at is auto-set via model's auto_now=True, so no need to manually update
+            student_item.save()
+
+        # Option 2: Create NEW StudentItem record (only if no existing record)
+        # Use model defaults for all fields EXCEPT continue_revision=False
+        except StudentItem.DoesNotExist:
+            StudentItem.objects.create(
+                student=current_student_profile,
+                item_id=item_id,
+                continue_revision=False,  # Explicitly set only this field
+                # All other fields use StudentItem model defaults (no need to specify)
+                # successes=0, is_master=False, next_1=1, next_2=1, etc.
+            )
+
+        # Return success response
+        return JsonResponse({"success": True})
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)})
+
+
+# Add @login_required to ensure we have a logged-in user (required for student progress)
+@login_required
+def view_items(request, activity_id):
+    # 1. Fetch the Activity object (404 if not found)
+    activity = get_object_or_404(Activity, id=activity_id)
+
+    # 2. Fetch the related Lesson (to get all activities in the lesson)
+    lesson = activity.lesson
+
+    # 3. Fetch ALL activities for the lesson (sorted by order)
+    activities = Activity.objects.filter(lesson=lesson).order_by("order")
+
+    # 4. Attach student-specific progress data via StudentActivity
+    try:
+        current_student_profile = request.user.profile
+    except Profile.DoesNotExist:
+        current_student_profile = None
+        student_activity_records = []
+    else:
+        student_activity_records = StudentActivity.objects.filter(
+            student=current_student_profile,
+            activity__in=activities,
+        ).select_related("activity")
+
+    # 4.3: StudentActivity lookup dictionary
+    student_activity_lookup = {
+        record.activity.id: record for record in student_activity_records
+    }
+
+    # 4.4: Attach template-required attributes to each Activity
+    for a in activities:
+        activity_record = student_activity_lookup.get(a.id)
+        if a.activity_type == "exercise":
+            a.student_progress = (
+                round(activity_record.progress, 0)
+                if (activity_record and activity_record.progress is not None)
+                else 0
+            )
+        else:
+            a.student_completed = (
+                activity_record.completed if activity_record else False
+            )
+
+    # 5. Previous/next activity logic (unchanged)
+    activity_list = list(activities)
+    current_index = activity_list.index(activity) if activity in activity_list else 0
+    previous_activity = activity_list[current_index - 1] if current_index > 0 else None
+    next_activity = (
+        activity_list[current_index + 1]
+        if current_index < len(activity_list) - 1
+        else None
+    )
+
+    # 6. Fetch ALL related Item objects for the activity (sorted by order)
+    all_items = Item.objects.filter(activity=activity).order_by("order")
+
+    # 7. Critical Fix: Fetch EXISTING StudentItem records (preserve all fields)
+    student_item_lookup = {}
+    if current_student_profile:
+        # Fetch ALL StudentItem records for the current student and this activity's items
+        # This preserves ALL fields (successes, is_master, etc.) from the database
+        student_item_records = StudentItem.objects.filter(
+            student=current_student_profile, item__in=all_items
+        ).select_related("item")
+
+        # Convert to lookup dictionary (item_id -> full StudentItem record)
+        student_item_lookup = {
+            record.item.id: record for record in student_item_records
+        }
+
+    # 8. Process items: Attach StudentItem data & FILTER ONLY continue_revision=True
+    processed_items = []
+    visible_item_index = 1  # Only increment for visible items (no gaps in numbering)
+
+    for item in all_items:
+        # Get the EXISTING StudentItem record (if it exists)
+        student_item_record = student_item_lookup.get(item.id)
+
+        # ---------- Critical Fix for Issue 1: Strict continue_revision logic ----------
+        # Priority 1: Use existing StudentItem's continue_revision (if record exists)
+        # Priority 2: Default to True ONLY if NO StudentItem record exists
+        if student_item_record:
+            item.continue_revision = student_item_record.continue_revision
+            # Optional: Attach other StudentItem fields to the item (for template use if needed)
+            item.successes = student_item_record.successes
+            item.is_master = student_item_record.is_master
+            item.next_1 = student_item_record.next_1
+            item.next_2 = student_item_record.next_2
+        else:
+            item.continue_revision = (
+                True  # Default only for new items (no existing record)
+            )
+            # Attach model defaults for other fields (matching StudentItem model)
+            item.successes = 0
+            item.is_master = False
+            item.next_1 = 1
+            item.next_2 = 1
+
+        # ---------- Only add items with continue_revision=True to processed_items ----------
+        if item.continue_revision:
+            # Set item number (only for visible items)
+            item.item_number = visible_item_index
+            visible_item_index += 1
+
+            # Process answer/hint (unchanged)
+            item.combined_answer = (
+                item.answer.strip()
+                if (item.answer and item.answer.strip())
+                else "No answer provided"
+            )
+            item.display_hint = (
+                item.hint.strip()
+                if (item.hint and item.hint.strip())
+                else "No hint available"
+            )
+
+            # Add to processed items (passed to template)
+            processed_items.append(item)
+
+    # 9. Pass data to template (use processed_items = only visible items)
+    context = {
+        "activity": activity,
+        "items": processed_items,  # Filtered: only continue_revision=True
+        "total_items": len(processed_items),
+        "course_id": activity.lesson.course.id,
+        "activities": activities,
+        "previous_activity": previous_activity,
+        "next_activity": next_activity,
+    }
+
+    # 10. Render template
+    return render(request, "course/view_items.html", context)
+
+
 @require_POST
 @login_required
 def submit_activity_view(request, activity_id):
-    if request.method == "POST":
+    try:
         student_profile = request.user.profile
         responses = json.loads(request.POST.get("responses", "[]"))
         is_completed = request.POST.get("is_completed", "false").lower() == "true"
+        revised_count = int(
+            request.POST.get("revised_count", 0)
+        )  # 接收前端传递的本轮修订数
         activity = get_object_or_404(Activity, pk=activity_id)
 
         with transaction.atomic():
@@ -1084,7 +1271,8 @@ def submit_activity_view(request, activity_id):
             progress = (mastered_items / total_items) * 100 if total_items > 0 else 0
             completed_status = is_completed or progress >= 100
 
-            StudentActivity.objects.update_or_create(
+            # Update StudentActivity
+            student_activity, _ = StudentActivity.objects.update_or_create(
                 student=student_profile,
                 activity=activity,
                 defaults={
@@ -1094,7 +1282,37 @@ def submit_activity_view(request, activity_id):
                 },
             )
 
-        return redirect("course:activity_detail", activity_id=activity_id)
+            # 新增：获取累计修订数（从StudentActivity或自定义存储中获取，这里简化为累加）
+            # 若需持久化累计修订数，建议在StudentActivity中添加cumulative_revised_items字段
+            cumulative_revised = (
+                getattr(student_activity, "cumulative_revised_items", 0) + revised_count
+            )
+            # 可选：更新StudentActivity的累计修订数字段
+            student_activity.cumulative_revised_items = cumulative_revised
+            student_activity.save()
+
+        # 新增：判断是否为AJAX请求，返回JSON（前端无刷新）或重定向
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse(
+                {
+                    "status": "success",
+                    "stats": {
+                        "cumulative_revised_items": cumulative_revised,
+                        "mastered_items": mastered_items,
+                        "total_items": total_items,
+                        "progress": round(progress, 1),
+                    },
+                }
+            )
+        else:
+            return redirect("course:activity_detail", activity_id=activity_id)
+
+    except Exception as e:
+        # 异常处理：AJAX请求返回错误JSON，普通请求重定向
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"status": "error", "message": str(e)}, status=500)
+        else:
+            raise e
 
 
 @login_required

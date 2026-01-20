@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block extra_head %}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
 {% endblock %}
 
 {% block activity_content %}
@@ -17,38 +17,44 @@
 </audio>
 
 <div class="card" style="border: none;">
-    <div class="card-body" style="padding: 0px;">
+    <div class="card-body" style="padding:0px;">
         <div class="activity-content">
-            <!-- Welcome Block (Initial View) -->
+            <!-- Welcome Block (更新：添加修订数显示，默认隐藏) -->
             <div id="welcomeBlock" class="text-center welcome-block p-4 mb-2 rounded">
-                <div class="text-center activity-description mb-5 text-start">
+                <div class="activity-description mb-5 text-start">
                     <p>This exercise has {{ total_items }} question{{ total_items|pluralize }}.</p>
+                    <!-- 新增：修订数显示，初始隐藏，提交后显示 -->
                     <p id="revisedItemCount" class="d-none text-primary">You have revised <strong id="totalRevised">0</strong> exercise items.</p>
                 </div>
-
-                <div class="progress-container mb-5" style="max-width: 500px; margin: 0 auto;">
+                <div class="progress-container mb-5">
                     <div class="d-flex justify-content-between mb-1">
                         <span>Mastery Progress</span>
                         <span id="masteredCount">{{ mastered_items_count }} / {{ total_items }}</span>
                     </div>
                     <div class="progress" style="height: 20px;">
-                        <div class="progress-bar bg-primary" role="progressbar" style="width: {% widthratio mastered_items_count total_items 100 %}%;"
-                             aria-valuenow="{% widthratio mastered_items_count total_items 100 %}" aria-valuemin="0" aria-valuemax="100">
-                            <span id="overallProgress">{% widthratio mastered_items_count total_items 100 %}%</span>
+                        <div class="progress-bar bg-primary"
+                             role="progressbar"
+                             style="width: {% widthratio mastered_items_count total_items 100 %}%;"
+                             aria-valuenow="{% widthratio mastered_items_count total_items 100 %}"
+                             aria-valuemin="0"
+                             aria-valuemax="100">
+                            <span class="progress-percentage" id="overallProgress">
+                                {% widthratio mastered_items_count total_items 100 %}%
+                            </span>
                         </div>
                     </div>
                 </div>
-
                 <button id="startButton" class="btn btn-success btn-lg">Start Exercise</button>
-                <a href="{% url 'course:view_items' activity.id %}" class="btn btn-warning btn-lg ms-3">View Items</a> 
+                <a href="{% url 'course:view_items' activity.id %}" class="btn btn-warning btn-lg">View Items</a> 
             </div>
 
-            <!-- Exercise Container (Hidden Initially) -->
+            <!-- Exercise Container (移除：Completion Modal 相关代码) -->
             <div id="exerciseContainer" class="flashcard-container d-none">
                 <form id="exerciseForm" method="post" action="{% url 'course:submit_activity' activity.id %}">
                     {% csrf_token %}
                     <input type="hidden" name="responses" id="responses">
                     <input type="hidden" name="is_completed" id="is_completed" value="false">
+                    <!-- 新增：存储修订数，用于后端返回 -->
                     <input type="hidden" name="revised_count" id="revised_count" value="0">
                 </form>
 
@@ -68,6 +74,8 @@
                          data-item-number-answers="{{ item.number_answers|default:0 }}"
                          data-item-answer1="{{ item.answer1|default:'' }}"
                          data-item-answer2="{{ item.answer2|default:'' }}"
+                         data-item-answer3="{{ item.answer3|default:'' }}"
+                         data-item-answer4="{{ item.answer4|default:'' }}"
                          data-item-hint="{{ item.hint|default:'' }}">
 
                         <div class="question-content mb-2 position-relative">
@@ -100,23 +108,38 @@
                                 {% endif %}
                                 <div class="blank-feedback-sentence fs-4 lh-lg mt-3"></div>
                                 <p class="correct-answer-text fs-5 text-primary mb-2"></p>
+                                <!-- ADD: Hint Element (below answer text) -->
                                 <p class="hint-text fs-6 text-muted mb-0"></p>
                             </div>
 
                             <div class="text-end mt-3 d-none skip-revision-container">
-                                <a href="#" class="skip-revision btn btn-sm btn-outline-primary">Skip future revision</a>
+                                <a href="#" class="skip-revision btn btn-sm btn-outline-primary">
+                                    Skip future revision
+                                </a>
                             </div>
                         </div>
 
+                        <!-- Answer Buttons -->
                         <div class="answer-buttons row g-2 mt-2">
                             <div class="col-12 text-end mb-1">
                                 <a href="#" class="not-sure-link">Not Sure?</a>
                             </div>
                             {% for option in item.options %}
                             <div class="col-6">
-                                <button type="button" class="btn btn-outline-primary w-100 answer-btn" data-option="{{ option }}">{{ option }}</button>
+                                <button type="button" class="btn btn-outline-primary w-100 answer-btn" data-option="{{ option }}">
+                                    {{ option }}
+                                </button>
                             </div>
                             {% endfor %}
+                            {% if item.options|length < 4 %}
+                                {% for _ in "xxxx"|slice:":4"|make_list %}
+                                    {% if forloop.counter > item.options|length %}
+                                    <div class="col-6 d-none">
+                                        <button type="button" class="btn btn-outline-primary w-100 answer-btn"></button>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
                         </div>
 
                         <div class="feedback-buttons d-none mt-3 d-flex justify-content-center gap-2">
@@ -131,7 +154,6 @@
     </div>
 </div>
 
-<!-- Simplified CSS -->
 <style>
     .not-sure-link { display: block; font-size: 1em; text-decoration: none; }
     .not-sure-link:hover { text-decoration: underline; }
@@ -143,60 +165,104 @@
     .incorrect-answer { background-color: #f8d7da !important; border-color: #dc3545 !important; color: #721c24 !important; }
     .feedback-result.correct { color: #28a745; font-weight: 600; }
     .feedback-result.incorrect { color: #dc3545; font-weight: 600; }
+    .progress-container { max-width: 500px; margin: 0 auto; }
     .bi-volume-up { color: #0d6efd; transition: opacity 0.2s; }
     .bi-volume-up:hover { opacity: 0.8; }
     .selected-answer { border-width: 2px !important; }
+    .skip-revision-container { z-index: 100; }
     .skip-revision:hover { background-color: rgba(13, 110, 253, 0.1); }
+    /* HINT STYLES: Smaller font + medium grey */
+    .hint-text {
+        font-size: 1.1em !important; /* Smaller than answer (fs-5 = 1.25rem) */
+        color: #909090 !important; /* Medium grey (adjust to #666/#888 if needed) */
+        margin-top: 0.5rem !important; /* Space between answer and hint */
+        line-height: 1.5;
+    }
 </style>
 
-<!-- Simplified JavaScript (Preserves Original Logic) -->
 <script>
 $(document).ready(function() {
-    // Core Variables (Minimized, No Redundancy)
-    let currentItem = null, answerIndex = 1, revisedCount = 0, isProcessingClick = false, hasPlayedStartAudio = false;
-    let allItems = [], workingList = [], availableItems = [], masteredItems = [];
-    const WORKING_SET_SIZE = 5, REVISION_ROUND_SIZE = 10, MASTERY_THRESHOLD = 3;
+    // Core Variables (Simplified + 新增localStorage相关)
+    let allItems = [];          
+    let workingList = [];       
+    let availableItems = [];    
+    let masteredItems = [];     
+    let currentItem = null;
+    let answerIndex = 1;
+    let numberOfAnswers = 0;
+    const WORKING_SET_SIZE = 5; 
+    const REVISION_ROUND_SIZE = 10;
+    const MASTERY_THRESHOLD = 3;
+    let isProcessingClick = false;
+    let hasPlayedStartAudio = false;
+    let isRevisionMode = false;
+    let revisedCount = 0;
+
+    // 新增：课程/活动专属localStorage key，避免数据混淆
     const activityId = "{{ activity.id }}";
     const localStorageKey = `cumulativeRevisedItems_Activity_${activityId}`;
-    let cumulativeRevisedItems = 0, isRevisionMode = false;
+    
+    // 新增：初始化修订数（从localStorage读取，避免刷新后归零）
+    let cumulativeRevisedItems = parseInt(localStorage.getItem(localStorageKey)) || 0;
+    if (cumulativeRevisedItems > 0) {
+        $('#totalRevised').text(cumulativeRevisedItems);
+        $('#revisedItemCount').removeClass('d-none');
+    }
 
-    // Simplified Helper Functions (Preserve Original Behavior)
-    const stopAllQuestionAudios = () => document.querySelectorAll('.question-audio').forEach(a => { a.pause(); a.currentTime = 0; });
-    const shuffleArray = (a) => {
+    // Helpers (Kept Only Essential)
+    function stopAllQuestionAudios() {
+        document.querySelectorAll('.question-audio').forEach(a => { a.pause(); a.currentTime = 0; });
+    }
+
+    function shuffleArray(a) {
         let array = [...a];
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [array[i], array[j]] = [array[j], array[i]];
         }
         return array;
-    };
-    const triggerConfetti = () => {
+    }
+
+    function triggerConfetti() {
         const end = Date.now() + 300;
         (function f() {
             confetti({ particleCount: 7, spread: 70, origin: { y: 0.6 } });
             if (Date.now() < end) requestAnimationFrame(f);
         })();
-    };
+    }
 
-    // Core Helpers (Consolidated, No Redundancy)
-    function completeRoundAndReturnToWelcome() { saveProgress(true); }
+    // 新增：完成一轮练习后，提交结果并返回欢迎块（替代模态框）
+    function completeRoundAndReturnToWelcome() {
+        // 1. 先保存进度（AJAX提交，无页面刷新）
+        saveProgress(true);
+    }
 
+    // Initialize Lists (UPDATED: Add hint parsing)
     function initializeLists() {
-        allItems = []; workingList = []; availableItems = []; masteredItems = [];
-        isRevisionMode = false; revisedCount = 0;
+        allItems = [];
+        workingList = [];
+        availableItems = [];
+        masteredItems = [];
+        isRevisionMode = false;
+        revisedCount = 0;
 
+        // Parse items from DOM (ADD hint to item object)
         allItems = $('.question-card').map(function() {
             const $card = $(this);
             const numberAnswers = parseInt($card.data('item-number-answers')) || 1;
             let correctAnswers = [];
 
-            try { correctAnswers = JSON.parse($card.data('item-correct-sequence-json') || '[]'); } catch(e) {}
+            try {
+                correctAnswers = JSON.parse($card.data('item-correct-sequence-json') || '[]');
+            } catch(e) {}
+
             if (correctAnswers.length === 0 && numberAnswers > 0) {
                 for (let i = 1; i <= numberAnswers; i++) {
                     const ans = $card.data(`item-answer${i}`);
                     if (ans && ans.trim()) correctAnswers.push(ans.trim());
                 }
             }
+
             if (correctAnswers.length === 0) {
                 const ca = $card.data('item-correct-answer');
                 if (ca) correctAnswers = [ca];
@@ -217,49 +283,72 @@ $(document).ready(function() {
                 element: this,
                 isFillInTheBlank: $card.data('item-number-answers') > 1,
                 lastAnswerWasCorrect: false,
-                hint: $card.data('item-hint') || ''
+                hint: $card.data('item-hint') || '' // ADD: Store hint
             };
 
-            if (item.is_master || item.successes >= MASTERY_THRESHOLD) masteredItems.push(item);
-            else if (item.continue_revision) availableItems.push(item);
+            if (item.is_master || item.successes >= MASTERY_THRESHOLD) {
+                masteredItems.push(item);
+            } else if (item.continue_revision) {
+                availableItems.push(item);
+            }
+
             return item;
         }).get();
 
+        // Set Revision Mode if all items are mastered
         if (masteredItems.length === allItems.length && allItems.length > 0) {
             isRevisionMode = true;
             workingList = shuffleArray([...allItems]);
         } else {
             availableItems = shuffleArray(availableItems);
-            while (workingList.length < WORKING_SET_SIZE && availableItems.length > 0) workingList.push(availableItems.shift());
+            while (workingList.length < WORKING_SET_SIZE && availableItems.length > 0) {
+                workingList.push(availableItems.shift());
+            }
         }
     }
 
+    // Refill Working List (Normal Mode Only)
     function refillWorkingList() {
         if (isRevisionMode) return;
         workingList = workingList.filter(item => !item.is_master);
-        while (workingList.length < WORKING_SET_SIZE && availableItems.length > 0) workingList.push(availableItems.shift());
+        while (workingList.length < WORKING_SET_SIZE && availableItems.length > 0) {
+            workingList.push(availableItems.shift());
+        }
         workingList = shuffleArray(workingList);
     }
 
+    // Process Next Item (更新：替换原有的showCompletionModal为completeRoundAndReturnToWelcome)
     function processNextItem() {
         if (isRevisionMode) {
             if (revisedCount >= REVISION_ROUND_SIZE || workingList.length === 0) {
+                // 原：showCompletionModal();
                 completeRoundAndReturnToWelcome();
                 return;
             }
-        } else if (masteredItems.length === allItems.length || workingList.length === 0) {
-            completeRoundAndReturnToWelcome();
-            return;
-        } else refillWorkingList();
+        } else {
+            if (masteredItems.length === allItems.length || workingList.length === 0) {
+                // 原：showCompletionModal();
+                completeRoundAndReturnToWelcome();
+                return;
+            }
+            refillWorkingList();
+        }
 
         currentItem = workingList[Math.floor(Math.random() * workingList.length)];
-        answerIndex = 1; hasPlayedStartAudio = false;
-        showItem(currentItem); resetQuestionState(); isProcessingClick = false;
+        answerIndex = 1;
+        numberOfAnswers = currentItem.isFillInTheBlank ? currentItem.numberAnswers : 1;
+        hasPlayedStartAudio = false;
+
+        showItem(currentItem);
+        resetQuestionState();
+        isProcessingClick = false;
     }
 
+    // Show Item (Unchanged)
     function showItem(item) {
         $('.question-card').addClass('d-none');
-        $(item.element).removeClass('d-none').find('.question-text').html(item.original_question);
+        $(item.element).removeClass('d-none');
+        $(item.element).find('.question-text').html(item.original_question);
         stopAllQuestionAudios();
 
         const audio = $(item.element).find('.question-audio')[0];
@@ -270,6 +359,7 @@ $(document).ready(function() {
         }
     }
 
+    // Reset Question State (UPDATED: Clear hint text)
     function resetQuestionState() {
         if (!currentItem) return;
         const $card = $(currentItem.element);
@@ -278,94 +368,149 @@ $(document).ready(function() {
         $card.find('.answer-buttons, .not-sure-link, img').removeClass('d-none');
         $card.find('.question-audio-icon').removeClass('d-none');
         $card.find('.feedback-audio-icon').addClass('d-none');
-        $card.find('.skip-revision').text('Skip future revision').removeClass('btn-success disabled').addClass('btn-outline-primary');
+        $card.find('.skip-revision').text('Skip future revision')
+            .removeClass('btn-success disabled')
+            .addClass('btn-outline-primary');
         $card.find('.question-text').html(currentItem.original_question);
+        // ADD: Clear hint text on reset
         $card.find('.hint-text').text('');
     }
 
+    // Reshuffle Options (Unchanged)
     function reshuffleOptions(item) {
         const $btns = $(item.element).find('.answer-btn:visible');
         let opts = $btns.map(function() { return $(this).data('option'); }).get();
-        if (opts.length > 1) opts = shuffleArray(opts);
-        $btns.each(function(i) { $(this).text(opts[i]).data('option', opts[i]); });
+        if (opts.length > 1) shuffleArray(opts);
+        $btns.each(function(i) {
+            $(this).text(opts[i]).data('option', opts[i]);
+        });
     }
 
+    // Show Feedback (UPDATED: Display hint below answer)
     function showFeedback(isCorrect, callback) {
         const $card = $(currentItem.element);
         $card.find('.answer-buttons, .not-sure-link').addClass('d-none');
-        $card.find('.feedback-result').text(isCorrect ? 'Correct!' : 'Incorrect!').toggleClass('correct', isCorrect).toggleClass('incorrect', !isCorrect).removeClass('d-none');
+        
+        $card.find('.feedback-result')
+            .text(isCorrect ? 'Correct!' : 'Incorrect!')
+            .toggleClass('correct', isCorrect)
+            .toggleClass('incorrect', !isCorrect)
+            .removeClass('d-none');
 
         const titleMatch = currentItem.original_question.match(/<div[^>]*>([\s\S]*?)<\/div>/);
         const title = titleMatch ? titleMatch[1].trim() : '';
         let answerLine = '';
-
+        
         if (currentItem.isFillInTheBlank) {
             const blankMatch = currentItem.original_question.match(/<div[^>]*>[\s\S]*?<\/div>\s*<div[^>]*>([\s\S]*?)<\/div>/);
             let filled = blankMatch ? blankMatch[1] : '';
-            currentItem.correctAnswers.forEach(ans => { filled = filled.replace(/_{3,}/, `<label class="text-primary">${ans}</label>`); });
+            currentItem.correctAnswers.forEach(ans => {
+                filled = filled.replace(/_{3,}/, `<label class="text-primary">${ans}</label>`);
+            });
             answerLine = filled;
-        } else answerLine = `<label class="text-primary">${currentItem.correctAnswers.join(' · ')}</label>`;
+        } else {
+            answerLine = `<label class="text-primary">${currentItem.correctAnswers.join(' · ')}</label>`;
+        }
 
-        $card.find('.question-text').html(`<div class="fs-5">${title}</div><div class="mt-3 fs-4 lh-lg">${answerLine}</div>`);
+        $card.find('.question-text').html(`
+            <div class="fs-5">${title}</div>
+            <div class="mt-3 fs-4 lh-lg">${answerLine}</div>
+        `);
+
         $card.find('.feedback-answer, .feedback-buttons').removeClass('d-none');
         if (isCorrect) $card.find('.skip-revision-container').removeClass('d-none');
         $card.find('.question-audio-icon').addClass('d-none');
         $card.find('.feedback-audio-icon').removeClass('d-none');
 
-        if (currentItem.hint) $card.find('.hint-text').text(currentItem.hint).removeClass('d-none');
-        else $card.find('.hint-text').addClass('d-none');
-
-        const audio = isCorrect ? $('#audio-correct')[0] : $('#audio-wrong')[0];
-        audio.currentTime = 0; audio.play().catch(() => {});
-
-        if ((currentItem.audio_play === 'end' || currentItem.audio_play === 'both')) {
-            const qAudio = $card.find('.question-audio')[0];
-            if (qAudio) { qAudio.currentTime = 0; qAudio.play().catch(() => {}); }
+        // ADD: Display hint below answer (only if hint exists)
+        if (currentItem.hint) {
+            $card.find('.hint-text').text(currentItem.hint).removeClass('d-none');
+        } else {
+            $card.find('.hint-text').addClass('d-none'); // Hide if no hint
         }
 
-        $card.find('.continue-btn').off('click').on('click', () => { isProcessingClick = false; callback(); });
-        $card.find('.stop-btn').off('click').on('click', () => { isProcessingClick = false; completeRoundAndReturnToWelcome(); });
+        const audio = isCorrect ? $('#audio-correct')[0] : $('#audio-wrong')[0];
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+
+        if (currentItem.audio_play === 'end' || currentItem.audio_play === 'both') {
+            const qAudio = $card.find('.question-audio')[0];
+            if (qAudio) qAudio.currentTime = 0, qAudio.play().catch(() => {});
+        }
+
+        $card.find('.continue-btn').off('click').on('click', () => {
+            isProcessingClick = false;
+            callback();
+        });
+        $card.find('.stop-btn').off('click').on('click', () => {
+            isProcessingClick = false;
+            // 原：showCompletionModal();
+            completeRoundAndReturnToWelcome();
+        });
+
         if (isCorrect) triggerConfetti();
     }
 
+    // 新增：AJAX保存进度（替代原有的saveProgressAndReload，无页面刷新）
     function saveProgress(isCompleted = false) {
+        // 无修订项时，直接返回欢迎块
         if (revisedCount === 0 && allItems.every(item => !item.is_master)) {
             $('#exerciseContainer').addClass('d-none');
             $('#welcomeBlock').removeClass('d-none');
             return;
         }
 
+        // 构建提交数据
         const responses = allItems.map(item => ({
-            item_id: item.id, successes: item.successes, is_master: item.is_master,
-            continue_revision: item.continue_revision, revise_at: item.revise_at,
-            next_1: item.next_1, next_2: item.next_2
+            item_id: item.id,
+            successes: item.successes,
+            is_master: item.is_master,
+            continue_revision: item.continue_revision,
+            revise_at: item.revise_at,
+            next_1: item.next_1,
+            next_2: item.next_2
         }));
+        const allMastered = allItems.every(i => i.is_master);
 
+        // 更新表单值
         $('#responses').val(JSON.stringify(responses));
-        $('#is_completed').val(allItems.every(i => i.is_master) ? 'true' : 'false');
+        $('#is_completed').val(allMastered ? 'true' : 'false');
         $('#revised_count').val(revisedCount);
 
+        // AJAX提交（无页面刷新）
         $.ajax({
             url: $('#exerciseForm').attr('action'),
             method: 'POST',
             data: $('#exerciseForm').serialize(),
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
             dataType: 'json',
             success: function(response) {
                 if (response.status === 'success') {
+                    // 1. 更新累计修订数（从后端返回，保证准确性）
                     cumulativeRevisedItems = response.stats.cumulative_revised_items || (cumulativeRevisedItems + revisedCount);
+                    
+                    // 2. 持久化到localStorage，避免刷新后归零
                     localStorage.setItem(localStorageKey, cumulativeRevisedItems);
                     
+                    // 3. 更新欢迎块显示
                     $('#totalRevised').text(cumulativeRevisedItems);
                     $('#masteredCount').text(`${response.stats.mastered_items} / ${response.stats.total_items}`);
                     $('#overallProgress').text(`${response.stats.progress}%`);
                     $('.progress-bar').css('width', `${response.stats.progress}%`);
                     
-                    if (cumulativeRevisedItems > 0) $('#revisedItemCount').removeClass('d-none');
+                    // 4. 显示修订数（首次提交后不再隐藏）
+                    if (cumulativeRevisedItems > 0) {
+                        $('#revisedItemCount').removeClass('d-none');
+                    }
+                    
+                    // 5. 切换回欢迎块（隐藏练习容器）
                     $('#exerciseContainer').addClass('d-none');
                     $('#welcomeBlock').removeClass('d-none');
                 } else {
                     alert('Error saving progress: ' + (response.message || 'Unknown error'));
+                    // 提交失败时，刷新页面回退到安全状态
                     window.location.reload();
                 }
             },
@@ -376,7 +521,7 @@ $(document).ready(function() {
         });
     }
 
-    // Simplified Event Listeners (Consolidated, No Redundancy)
+    // Start Button Click (Unchanged)
     $('#startButton').on('click', function() {
         document.querySelectorAll('audio').forEach(a => { a.pause(); a.currentTime = 0; });
         initializeLists();
@@ -386,106 +531,199 @@ $(document).ready(function() {
         processNextItem();
     });
 
+    // Answer Button Click (Unchanged Logic - No JS Progress)
     $(document).on('click', '.answer-btn', function() {
         if (isProcessingClick || !currentItem) return;
         isProcessingClick = true;
+
         const selected = $(this).data('option');
 
-        // Handle Both Question Types (Consolidated Logic)
         if (currentItem.isFillInTheBlank) {
             const correctAnswer = $(currentItem.element).data(`item-answer${answerIndex}`);
             const isCorrect = selected === correctAnswer;
-            $(this).addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer')).siblings().removeClass('selected-answer correct-answer incorrect-answer');
+
+            $(this).addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'))
+                .siblings().removeClass('selected-answer correct-answer incorrect-answer');
 
             if (isCorrect) {
                 const $text = $(currentItem.element).find('.question-text');
                 let html = $text.html();
                 const match = html.match(/_{3,}/);
-                if (match) html = html.substring(0, match.index) + `<span class="text-primary">${selected}</span>` + html.substring(match.index + match[0].length);
-                $text.html(html);
+                if (match) {
+                    const start = match.index;
+                    const end = start + match[0].length;
+                    html = html.substring(0, start) + `<span class="text-primary">${selected}</span>` + html.substring(end);
+                    $text.html(html);
+                }
 
                 currentItem.lastAnswerWasCorrect = true;
-                if (answerIndex >= currentItem.numberAnswers) {
+
+                if (answerIndex >= numberOfAnswers) {
                     if (!isRevisionMode) {
                         currentItem.successes += 1;
                         if (!currentItem.is_master && currentItem.successes >= MASTERY_THRESHOLD) {
                             currentItem.is_master = true;
                             masteredItems = allItems.filter(i => i.is_master);
                         }
-                    } else { currentItem.successes += 1; revisedCount++; workingList = workingList.filter(item => item.id !== currentItem.id); }
+                    } else {
+                        currentItem.successes += 1;
+                    }
+
+                    if (isRevisionMode) {
+                        revisedCount++;
+                        workingList = workingList.filter(item => item.id !== currentItem.id);
+                    }
+
                     showFeedback(true, () => processNextItem());
-                } else { answerIndex++; isProcessingClick = false; }
+                } else {
+                    answerIndex++;
+                    isProcessingClick = false;
+                }
             } else {
                 currentItem.lastAnswerWasCorrect = false;
-                currentItem.successes = !isRevisionMode ? Math.max(0, currentItem.successes - 1) : Math.max(MASTERY_THRESHOLD, currentItem.successes - 1);
-                if (isRevisionMode) { revisedCount++; workingList = workingList.filter(item => item.id !== currentItem.id); }
-                showFeedback(false, () => { reshuffleOptions(currentItem); processNextItem(); });
+
+                if (!isRevisionMode) {
+                    currentItem.successes = Math.max(0, currentItem.successes - 1);
+                } else {
+                    currentItem.successes = Math.max(MASTERY_THRESHOLD, currentItem.successes - 1);
+                }
+
+                if (isRevisionMode) {
+                    revisedCount++;
+                    workingList = workingList.filter(item => item.id !== currentItem.id);
+                }
+
+                showFeedback(false, () => {
+                    reshuffleOptions(currentItem);
+                    processNextItem();
+                });
             }
         } else {
             const correct = currentItem.correctAnswers[0];
             const isCorrect = selected === correct;
-            $(this).addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer')).siblings().removeClass('selected-answer correct-answer incorrect-answer');
+
+            $(this).addClass('selected-answer ' + (isCorrect ? 'correct-answer' : 'incorrect-answer'))
+                .siblings().removeClass('selected-answer correct-answer incorrect-answer');
 
             if (isCorrect) {
                 currentItem.lastAnswerWasCorrect = true;
+
                 if (!isRevisionMode) {
                     currentItem.successes += 1;
                     if (!currentItem.is_master && currentItem.successes >= MASTERY_THRESHOLD) {
                         currentItem.is_master = true;
                         masteredItems = allItems.filter(i => i.is_master);
                     }
-                } else { currentItem.successes += 1; revisedCount++; workingList = workingList.filter(item => item.id !== currentItem.id); }
+                } else {
+                    currentItem.successes += 1;
+                }
+
+                if (isRevisionMode) {
+                    revisedCount++;
+                    workingList = workingList.filter(item => item.id !== currentItem.id);
+                }
+
                 showFeedback(true, () => processNextItem());
             } else {
                 currentItem.lastAnswerWasCorrect = false;
-                currentItem.successes = !isRevisionMode ? Math.max(0, currentItem.successes - 1) : Math.max(MASTERY_THRESHOLD, currentItem.successes - 1);
-                if (isRevisionMode) { revisedCount++; workingList = workingList.filter(item => item.id !== currentItem.id); }
-                showFeedback(false, () => { reshuffleOptions(currentItem); processNextItem(); });
+
+                if (!isRevisionMode) {
+                    currentItem.successes = Math.max(0, currentItem.successes - 1);
+                } else {
+                    currentItem.successes = Math.max(MASTERY_THRESHOLD, currentItem.successes - 1);
+                }
+
+                if (isRevisionMode) {
+                    revisedCount++;
+                    workingList = workingList.filter(item => item.id !== currentItem.id);
+                }
+
+                showFeedback(false, () => {
+                    reshuffleOptions(currentItem);
+                    processNextItem();
+                });
             }
         }
     });
 
+    // "Not Sure?" Link Click (Unchanged Logic)
     $(document).on('click', '.not-sure-link', function(e) {
         e.preventDefault();
         if (isProcessingClick || !currentItem) return;
         isProcessingClick = true;
 
         currentItem.lastAnswerWasCorrect = false;
-        currentItem.successes = !isRevisionMode ? Math.max(0, currentItem.successes - 1) : Math.max(MASTERY_THRESHOLD, currentItem.successes - 1);
-        if (isRevisionMode) { revisedCount++; workingList = workingList.filter(item => item.id !== currentItem.id); }
 
-        showFeedback(false, () => { reshuffleOptions(currentItem); processNextItem(); });
+        if (!isRevisionMode) {
+            currentItem.successes = Math.max(0, currentItem.successes - 1);
+        } else {
+            currentItem.successes = Math.max(MASTERY_THRESHOLD, currentItem.successes - 1);
+        }
+
+        if (isRevisionMode) {
+            revisedCount++;
+            workingList = workingList.filter(item => item.id !== currentItem.id);
+        }
+
+        showFeedback(false, () => {
+            reshuffleOptions(currentItem);
+            processNextItem();
+        });
     });
 
+    // Skip Revision Click (Unchanged Logic)
     $(document).on('click', '.skip-revision', function(e) {
-        e.preventDefault();
-        if (!currentItem || (!currentItem.lastAnswerWasCorrect && currentItem.successes === 0)) {
+        e.preventDefault(); 
+        if (!currentItem) return;
+        if (!currentItem.lastAnswerWasCorrect && currentItem.successes === 0) {
             alert('You can only skip items you answered correctly!');
             return;
         }
 
         currentItem.successes += 1;
-        if (isRevisionMode) { revisedCount++; workingList = workingList.filter(item => item.id !== currentItem.id); }
-        else {
-            currentItem.is_master = true;
+        
+        if (isRevisionMode) {
+            revisedCount++;
+            workingList = workingList.filter(item => item.id !== currentItem.id);
+        } else {
+            if (!currentItem.is_master) {
+                currentItem.is_master = true;
+                masteredItems = allItems.filter(i => i.is_master);
+            }
             currentItem.continue_revision = false;
             currentItem.revise_at = '2099-12-31';
-            currentItem.next_1 = 9999; currentItem.next_2 = 9999;
-            $(currentItem.element).data({ 'item-continuerevision': false, 'item-successes': currentItem.successes, 'item-is-master': true });
+            currentItem.next_1 = 9999;
+            currentItem.next_2 = 9999;
+
+            $(currentItem.element)
+                .data('item-continuerevision', false)
+                .data('item-successes', currentItem.successes)
+                .data('item-is-master', true)
+                .data('item-reviseat', '2099-12-31')
+                .data('item-next1', 9999)
+                .data('item-next2', 9999);
         }
 
-        $(this).text('Mastered!').removeClass('btn-outline-primary').addClass('btn-success disabled').css({ 'pointer-events': 'none', 'font-weight': 'bold' });
+        $(this).text('Mastered!')
+            .removeClass('btn-outline-primary')
+            .addClass('btn-success disabled')
+            .prop('disabled', true)
+            .css({
+                'pointer-events': 'none',
+                'font-weight': 'bold'
+            });
+
         triggerConfetti();
-        setTimeout(() => processNextItem(), 300);
+        setTimeout(() => {
+            processNextItem();
+        }, 300);
     });
 
+    // Audio Icon Click (Unchanged)
     $(document).on('click', '.question-audio-icon, .feedback-audio-icon', function() {
         $(this).closest('.question-content').find('.question-audio')[0]?.play();
     });
-
-    // Initialization: Force hide revised count
-    $('#revisedItemCount').addClass('d-none');
-    $('#totalRevised').text('0');
 });
 </script>
+
 {% endblock %}

@@ -13,8 +13,18 @@ urlpatterns = [
     ),
     path("activity/<int:activity_id>/", views.activity_view, name="activity_detail"),
     path(
+        "activity/<int:activity_id>/view-items",
+        views.view_items,
+        name="view_items",
+    ),
+    path(
         "submit_activity/<int:activity_id>/",
         views.submit_activity_view,
         name="submit_activity",
+    ),
+    path(
+        "update-revision/",
+        views.update_revision,
+        name="update_revision",
     ),
 ]

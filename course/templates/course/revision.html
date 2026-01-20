@@ -28,6 +28,8 @@
                 {% if first_course %}
                     {% if first_course.revision_items_count > 0 %}
                         <h4 id="courseTitle" class="pt-5">{{ first_course.title|escape }}</h4>
+                        <!-- Fixed: Remain hidden until FIRST submission (no initial 0 display) -->
+                        <p id="revisedItemCount" class="d-none">You have revised <strong id="totalRevised">0</strong> items.</p>
                         <p id="itemCount">There are <strong>{{ first_course.revision_items_count }}</strong> items due for revision.</p>
                         <button id="startButton" class="btn btn-success btn-lg mt-3">Start Revision</button>
                     {% else %}
@@ -127,25 +129,6 @@
                     </div>
                     {% endfor %}
                 </div>
-
-                <!-- Feedback Modal -->
-                <div class="modal fade" id="feedbackModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-body text-center py-5">
-                                <h4 id="feedbackResult">Round Completed!</h4>
-                                <p id="correctAnswerText" class="lead">You got <label id="roundScore">0</label> out of 10 correct</p>
-                                <div class="my-4">
-                                    <div class="progress-icons d-inline-flex gap-2"></div>
-                                    <span class="ms-3 h5 correct-count">0/10</span>
-                                </div>
-                                <div class="d-flex justify-content-center gap-3">
-                                    <button class="btn btn-outline-secondary btn-lg" id="stopButton">View Progress</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -208,7 +191,22 @@ $(document).ready(function() {
     const MAX_ITEMS_PER_ROUND = 10;
     let isProcessingClick = false;
     let hasPlayedStartAudio = false;
+    
+    // Critical Fix: Course-specific localStorage key (avoids cross-course data mixup)
+    const courseId = "{{ first_course.id }}";
+    const localStorageKey = `cumulativeRevisedItems_${courseId}`;
+    
+    // Initialize cumulative revised items from localStorage (NO FLASH TO 0)
+    // Only show the count if there's existing data (after first submission)
+    let cumulativeRevisedItems = parseInt(localStorage.getItem(localStorageKey)) || 0;
+    if (cumulativeRevisedItems > 0) {
+        $('#totalRevised').text(cumulativeRevisedItems);
+        $('#revisedItemCount').removeClass('d-none');
+    }
 
+    // ------------------------------
+    // Helper Functions
+    // ------------------------------
     function stopAllQuestionAudios() {
         document.querySelectorAll('.question-audio').forEach(a => { a.pause(); a.currentTime = 0; });
     }
@@ -263,7 +261,7 @@ $(document).ready(function() {
                 next_2: parseInt($card.data('item-next2') || 1),
                 revise_at: $card.data('item-reviseat') || null,
                 continue_revision: $card.data('item-continuerevision') === true,
-                original_question: $card.find('.question-text').html(), // Preserve title + question structure
+                original_question: $card.find('.question-text').html(),
                 audio_play: $card.data('item-audioplay') || 'start',
                 options: $card.find('.answer-btn').map(function() { return $(this).data('option'); }).get()
             };
@@ -277,7 +275,7 @@ $(document).ready(function() {
 
     function processNextItem() {
         if (revisedItems.length >= MAX_ITEMS_PER_ROUND) {
-            showRoundCompletion();
+            completeRoundAndReturnToWelcome();
             return;
         }
 
@@ -287,7 +285,7 @@ $(document).ready(function() {
             currentItem = otherItems.shift();
             otherItems.push(currentItem);
         } else {
-            showRoundCompletion();
+            completeRoundAndReturnToWelcome();
             return;
         }
 
@@ -303,7 +301,7 @@ $(document).ready(function() {
     function showItem(item) {
         $('.question-card').addClass('d-none');
         $(item.element).removeClass('d-none');
-        $(item.element).find('.question-text').html(item.original_question); // Restore title + question
+        $(item.element).find('.question-text').html(item.original_question);
 
         stopAllQuestionAudios();
         const $audio = $(item.element).find('.question-audio')[0];
@@ -323,7 +321,6 @@ $(document).ready(function() {
         $card.find('.answer-buttons, .not-sure-link, img').removeClass('d-none');
         $card.find('.skip-revision').text('Skip future revision').css({color: '', 'font-weight': ''});
 
-        // Restore original title + question structure exactly
         $card.find('.question-text').html(currentItem.original_question);
     }
 
@@ -404,7 +401,16 @@ $(document).ready(function() {
         if (isCorrect) triggerConfetti();
     }
 
+    // ------------------------------
+    // Critical Fix: Save Progress (AJAX to submit_revision)
+    // ------------------------------
     function saveProgress(isCompleted = false) {
+        // No submission if no revised items (avoids empty stats)
+        if (revisedItems.length === 0) {
+            completeRoundAndReturnToWelcome();
+            return;
+        }
+
         const responses = revisedItems.map(i => ({
             student_item_id: i.id,
             successes: i.successes,
@@ -419,53 +425,65 @@ $(document).ready(function() {
         $.ajax({
             url: $('#revisionForm').attr('action'),
             method: 'POST',
-            data: $('#revisionForm').serializeArray(),
+            data: $('#revisionForm').serialize(), // Simplified: use form serialize (includes CSRF)
             headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val()
+                'X-Requested-With': 'XMLHttpRequest'
             },
             dataType: 'json',
             success: function(response) {
                 if (response.status === 'success') {
+                    // 1. Update with BACKEND'S cumulative count (NO FLASH TO 0, NO LOCAL GUESSING)
+                    cumulativeRevisedItems = response.stats.cumulative_revised_items || 0;
+                    
+                    // 2. Persist to localStorage (for page reloads, no future flash to 0)
+                    localStorage.setItem(localStorageKey, cumulativeRevisedItems);
+                    
+                    // 3. Update Welcome Block (ONLY show revised count AFTER submission)
+                    $('#totalRevised').text(cumulativeRevisedItems);
                     $('#itemCount').html(`There are <strong>${response.stats.remaining_items}</strong> items due for revision.`);
-                    if ($('#revisionContainer').hasClass('d-none')) {
-                        $('#welcomeBlock').removeClass('d-none');
-                    }
-                    if (response.redirect_url) {
-                        window.location.href = response.redirect_url;
+                    
+                    // 4. Show revised count (first submission or subsequent)
+                    if (cumulativeRevisedItems > 0) {
+                        $('#revisedItemCount').removeClass('d-none');
                     }
                 } else {
-                    alert('Error: ' + (response.message || 'Unknown error'));
+                    alert('Error saving progress: ' + (response.message || 'Unknown error'));
                 }
             },
-            error: function() {
-                alert('Error saving progress.');
+            error: function(xhr, status, error) {
+                alert('Failed to save revision progress: ' + error);
             }
         });
     }
 
-    function showRoundCompletion() {
-        $('#feedbackModal').modal('show');
-        $('#roundScore').text(correctCount);
-        $('.correct-count').text(`${correctCount}/10`);
-
-        $('.progress-icons').empty();
-        for (let i = 0; i < correctCount; i++) {
-            $('.progress-icons').append('<i class="bi bi-check-circle-fill text-success fs-4"></i>');
-        }
-        for (let i = correctCount; i < 10; i++) {
-            $('.progress-icons').append('<i class="bi bi-circle text-secondary fs-4"></i>');
-        }
+    // ------------------------------
+    // Fix: Return to Welcome Block Smoothly (After Submission)
+    // ------------------------------
+    function completeRoundAndReturnToWelcome() {
+        // 1. Save progress first (critical: get backend stats before showing Welcome Block)
+        saveProgress(true);
+        
+        // 2. Switch visibility (no redirect, no state reset)
+        $('#revisionContainer').addClass('d-none');
+        $('#welcomeBlock').removeClass('d-none');
+        $('#welcomeBlock .alert').remove();
     }
 
-    
+    // ------------------------------
+    // Event Listeners
+    // ------------------------------
     $(document).on('click', '#startButton, #startOverallButton', function(e) {
         e.preventDefault();
         document.querySelectorAll('audio').forEach(a => { a.pause(); a.currentTime = 0; });
         initializeLists();
+        
+        // Only start if there are items to revise
         if (dueItems.length + otherItems.length === 0) return;
+        
+        // Hide Welcome Block (revised count remains hidden if no submission yet)
         $('#welcomeBlock').addClass('d-none');
         $('#revisionContainer').removeClass('d-none');
+        
         processNextItem();
     });
 
@@ -647,14 +665,6 @@ $(document).ready(function() {
             triggerConfetti();
             processNextItem();
         }
-    });
-
-    $('#stopButton').on('click', function() {
-        $('#feedbackModal').modal('hide');
-        saveProgress(true);
-        $('#revisionContainer').addClass('d-none');
-        $('#welcomeBlock').removeClass('d-none');
-        $('#welcomeBlock .alert').remove();
     });
 
     $(document).on('click', '.question-audio-icon, .feedback-audio-icon', function() {

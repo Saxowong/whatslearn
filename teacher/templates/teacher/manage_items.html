@@ -105,8 +105,16 @@
                             </td>
                         </tr>
                         {% empty %}
+                        <!-- FIX 1: Replace single colspan cell with 8 empty cells for DataTables compatibility -->
                         <tr>
-                            <td colspan="8" class="text-center">No items found</td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -238,7 +246,7 @@ $(document).ready(function() {
             lengthChange: false, // Disable DataTables' default length change (we use custom dropdown)
             columnDefs: [
                 {
-                    targets: 6, // Created At column
+                    targets: 6, // Created At column (7th column, index 6)
                     render: function(data, type) {
                         if (type === 'display') {
                             if (!data || data === 'N/A') return 'N/A';
@@ -261,16 +269,17 @@ $(document).ready(function() {
                     }
                 },
                 {
-                    targets: 0, // Order column
+                    targets: 0, // Order column (1st column, index 0)
                     render: function(data, type, row) {
                         if (type === 'display') {
-                            return `<span class="order-value">${data}</span>`;
+                            // Only render the order value if there's actual data
+                            return data ? `<span class="order-value">${data}</span>` : '';
                         }
                         return data;
                     }
                 },
                 {
-                    targets: -1, // Actions column
+                    targets: 7, // Actions column (8th column, index 7)
                     orderable: false,
                     searchable: false
                 }
@@ -278,7 +287,16 @@ $(document).ready(function() {
             language: {
                 search: "_INPUT_",
                 searchPlaceholder: "Search items...",
-                emptyTable: "No items found for this activity."
+                emptyTable: "No items found for this activity." // This text will show instead of empty cells
+            },
+            // FIX 2: Add createdRow callback to handle empty state styling
+            createdRow: function(row, data, dataIndex) {
+                // Check if all cells are empty (empty state)
+                const isEmptyRow = Object.values(data).every(cell => cell === '' || cell === undefined);
+                if (isEmptyRow) {
+                    // Hide the empty row (DataTables will show emptyTable text instead)
+                    $(row).hide();
+                }
             },
             initComplete: function() {
                 $('.dataTables_filter input').addClass('form-control form-control-sm');
